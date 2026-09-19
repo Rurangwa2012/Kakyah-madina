@@ -1,0 +1,111 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isActiveUser() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && userDoc().active == true;
+    }
+
+    function isOwner() {
+      return isActiveUser() && userDoc().role == 'owner';
+    }
+
+    function isCashier() {
+      return isActiveUser() && userDoc().role == 'cashier';
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner() || (signedIn() && request.auth.uid == userId);
+      allow create, update: if isOwner();
+      allow delete: if false;
+    }
+
+    match /menu/{itemId} {
+      allow read: if isActiveUser();
+      allow create, update: if isOwner();
+      allow delete: if false;
+    }
+
+    match /orders/{orderId} {
+      allow read: if isOwner() || isCashier();
+      allow create: if isActiveUser()
+        && request.resource.data.cashier_id == request.auth.uid
+        && request.resource.data.type == 'student'
+        && request.resource.data.keys().hasAll([
+          'order_number', 'lines', 'total_halalas', 'payment_method', 'status', 'date_key'
+        ]);
+      allow update: if isOwner();
+      allow delete: if false;
+    }
+
+    match /group_orders/{orderId} {
+      allow read: if isActiveUser();
+      allow create: if isActiveUser()
+        && request.resource.data.cashier_id == request.auth.uid;
+      allow update: if isOwner()
+        || (isCashier()
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'updated_at', 'payment_status']));
+      allow delete: if false;
+    }
+
+    match /inventory/{itemId} {
+      allow read: if isActiveUser();
+      allow create: if isOwner();
+      allow update: if isOwner()
+        || (isCashier()
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['quantity', 'status', 'last_updated']));
+      allow delete: if false;
+    }
+
+    match /stock_movements/{moveId} {
+      allow read: if isActiveUser();
+      allow create: if isActiveUser()
+        && request.resource.data.created_by == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /buffet_tracking/{rowId} {
+      allow read: if isOwner();
+      allow write: if isOwner();
+    }
+
+    match /expenses/{expenseId} {
+      allow read, create, update: if isOwner();
+      allow delete: if false;
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isOwner();
+      allow create: if isActiveUser()
+        && request.resource.data.actor_id == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /daily_summaries/{dayId} {
+      allow read: if isOwner();
+      allow create, update: if isActiveUser();
+      allow delete: if false;
+    }
+
+    match /settings/{id} {
+      allow read: if isActiveUser();
+      allow write: if isOwner();
+    }
+
+    match /counters/{id} {
+      allow read: if isActiveUser();
+      allow write: if isActiveUser();
+    }
+  }
+}

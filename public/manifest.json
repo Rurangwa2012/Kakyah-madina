@@ -1,0 +1,18 @@
+{
+  "name": "Kak Yah Madina",
+  "short_name": "Kak Yah",
+  "description": "POS and management for Kak Yah Nasi Kandar",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6efe4",
+  "theme_color": "#b23a1e",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

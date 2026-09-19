@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f6efe4;
+  --panel: #fffaf3;
+  --ink: #2b1a12;
+  --muted: #7a5c45;
+  --line: #ead9c4;
+  --spice: #b23a1e;
+  --leaf: #2f6b4f;
+  --gold: #d4a017;
+}
+
+html,
+body {
+  min-height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+body {
+  font-family: "Segoe UI", "Source Sans 3", sans-serif;
+}
+
+.font-display {
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+input,
+select,
+textarea {
+  min-height: 48px;
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: white;
+  padding: 0.75rem 1rem;
+  color: var(--ink);
+}
+
+label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

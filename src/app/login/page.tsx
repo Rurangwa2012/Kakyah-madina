@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { Button, ErrorState } from "@/components/ui";
+import { authErrorMessage } from "@/lib/userProfile";
 
 export default function LoginPage() {
   const { login, configured, loading, profile, firebaseUser } = useAuth();
@@ -13,9 +14,16 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  if (!loading && firebaseUser && profile?.active) {
-    router.replace(profile.role === "owner" ? "/dashboard" : "/pos");
-  }
+  useEffect(() => {
+    if (loading) return;
+    if (firebaseUser && profile?.active) {
+      router.replace(profile.role === "owner" ? "/dashboard" : "/pos");
+      return;
+    }
+    if (firebaseUser && !profile?.active) {
+      router.replace("/unauthorized");
+    }
+  }, [loading, firebaseUser, profile, router]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -24,7 +32,7 @@ export default function LoginPage() {
     try {
       await login(email.trim(), password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(authErrorMessage(err));
     } finally {
       setBusy(false);
     }

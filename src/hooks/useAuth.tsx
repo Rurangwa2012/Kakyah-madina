@@ -11,6 +11,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { getFirebaseAuth, getDb, isFirebaseConfigured } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/collections";
 import { writeAuditLog } from "@/lib/firestore";
+import { profileFromDoc } from "@/lib/userProfile";
 import type { AppUser } from "@/types";
 
 interface AuthState {
@@ -19,6 +20,7 @@ interface AuthState {
   loading: boolean;
   configured: boolean;
   online: boolean;
+  profileError: string;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -30,6 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState(true);
+  const [profileError, setProfileError] = useState("");
   const configured = isFirebaseConfigured();
 
   useEffect(() => {
@@ -53,19 +56,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsub = onAuthStateChanged(auth, (user) => {
       unsubProfile?.();
       setFirebaseUser(user);
+      setProfileError("");
       if (!user) {
         setProfile(null);
         setLoading(false);
         return;
       }
-      unsubProfile = onSnapshot(doc(getDb(), COLLECTIONS.users, user.uid), (snap) => {
-        if (snap.exists()) {
-          setProfile({ id: snap.id, ...(snap.data() as Omit<AppUser, "id">) });
-        } else {
-          setProfile(null);
-        }
+      try {
+        unsubProfile = onSnapshot(
+          doc(getDb(), COLLECTIONS.users, user.uid),
+          (snap) => {
+            if (snap.exists()) {
+              setProfile(profileFromDoc(snap.id, snap.data() as Record<string, unknown>));
+            } else {
+              setProfile(null);
+            }
+            setLoading(false);
+          },
+          (err) => {
+            setProfileError(err.message);
+            setProfile(null);
+            setLoading(false);
+          },
+        );
+      } catch (err) {
+        setProfileError(err instanceof Error ? err.message : "Could not load profile");
         setLoading(false);
-      });
+      }
     });
     return () => {
       unsub();
@@ -80,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       configured,
       online,
+      profileError,
       login: async (email, password) => {
         const cred = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
         try {
@@ -111,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await signOut(getFirebaseAuth());
       },
     }),
-    [firebaseUser, profile, loading, configured, online],
+    [firebaseUser, profile, loading, configured, online, profileError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

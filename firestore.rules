@@ -12,15 +12,15 @@ service cloud.firestore {
     function isActiveUser() {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && userDoc().active == true;
+        && (userDoc().active == true || userDoc().active == 'true');
     }
 
     function isOwner() {
-      return isActiveUser() && userDoc().role == 'owner';
+      return isActiveUser() && (userDoc().role == 'owner' || userDoc().role == 'Owner');
     }
 
     function isCashier() {
-      return isActiveUser() && userDoc().role == 'cashier';
+      return isActiveUser() && (userDoc().role == 'cashier' || userDoc().role == 'Cashier');
     }
 
     match /users/{userId} {

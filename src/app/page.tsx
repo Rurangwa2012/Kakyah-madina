@@ -3,9 +3,11 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import { useI18n } from "@/i18n/I18nProvider";
 
 export default function HomePage() {
   const { loading, profile, firebaseUser } = useAuth();
+  const { t } = useI18n();
   const router = useRouter();
 
   useEffect(() => {
@@ -23,7 +25,7 @@ export default function HomePage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center text-[var(--muted)]">
-      Opening Kak Yah Madina…
+      {t("opening")}
     </div>
   );
 }

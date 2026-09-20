@@ -8,6 +8,7 @@ import { createExpense, listenExpenses } from "@/services/finance";
 import { EXPENSE_CATEGORIES, type Expense, type ExpenseCategory, type PaymentMethod } from "@/types";
 import { formatSar, sarToHalalas } from "@/utils/money";
 import { toDateKey } from "@/utils/date";
+import { useI18n } from "@/i18n/I18nProvider";
 
 export default function ExpensesPage() {
   return (
@@ -19,6 +20,7 @@ export default function ExpensesPage() {
 
 function ExpensesView() {
   const { profile } = useAuth();
+  const { t } = useI18n();
   const [rows, setRows] = useState<Expense[]>([]);
   const [form, setForm] = useState({
     category: "ingredients" as ExpenseCategory,
@@ -50,7 +52,7 @@ function ExpensesView() {
 
   return (
     <div>
-      <PageHeader title="Expenses" subtitle="Owner-only costs used for estimated profit." />
+      <PageHeader title={t("expenses.title")} subtitle={t("expenses.subtitle")} />
       <Card className="mb-4">
         <form onSubmit={onSubmit} className="grid gap-3 md:grid-cols-3">
           <select
@@ -59,12 +61,12 @@ function ExpensesView() {
           >
             {EXPENSE_CATEGORIES.map((cat) => (
               <option key={cat} value={cat}>
-                {cat}
+                {t(`expenseCats.${cat}`)}
               </option>
             ))}
           </select>
           <input
-            placeholder="Description"
+            placeholder={t("expenses.description")}
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             required
@@ -72,7 +74,7 @@ function ExpensesView() {
           <input
             type="number"
             step="0.01"
-            placeholder="Amount SAR"
+            placeholder={t("expenses.amount")}
             value={form.amount}
             onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
           />
@@ -80,19 +82,26 @@ function ExpensesView() {
             value={form.payment_method}
             onChange={(e) => setForm({ ...form, payment_method: e.target.value as PaymentMethod })}
           >
-            <option value="cash">Cash</option>
-            <option value="card">Card</option>
-            <option value="mobile">Mobile</option>
+            <option value="cash">{t("cash")}</option>
+            <option value="card">{t("card")}</option>
+            <option value="mobile">{t("mobile")}</option>
           </select>
           <input type="date" value={form.date_key} onChange={(e) => setForm({ ...form, date_key: e.target.value })} />
-          <Button type="submit">Save expense</Button>
+          <Button type="submit">{t("expenses.save")}</Button>
         </form>
       </Card>
       <div className="overflow-x-auto rounded-2xl border border-[var(--line)] bg-white">
-        <table className="min-w-full text-left text-sm">
+        <table className="min-w-full text-start text-sm">
           <thead className="bg-[var(--paper)]">
             <tr>
-              {["Date", "Category", "Description", "Amount", "Method", "By"].map((h) => (
+              {[
+                t("expenses.date"),
+                t("expenses.category"),
+                t("expenses.description"),
+                t("expenses.amount"),
+                t("expenses.method"),
+                t("expenses.by"),
+              ].map((h) => (
                 <th key={h} className="px-3 py-3">
                   {h}
                 </th>
@@ -103,10 +112,10 @@ function ExpensesView() {
             {rows.map((row) => (
               <tr key={row.id} className="border-t border-[var(--line)]">
                 <td className="px-3 py-3">{row.date_key}</td>
-                <td className="px-3 py-3">{row.category}</td>
+                <td className="px-3 py-3">{t(`expenseCats.${row.category}`)}</td>
                 <td className="px-3 py-3">{row.description}</td>
                 <td className="px-3 py-3">{formatSar(row.amount_halalas)}</td>
-                <td className="px-3 py-3">{row.payment_method}</td>
+                <td className="px-3 py-3">{t(row.payment_method)}</td>
                 <td className="px-3 py-3">{row.created_by_name}</td>
               </tr>
             ))}

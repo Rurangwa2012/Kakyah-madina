@@ -25,18 +25,28 @@ export function profileFromDoc(id: string, data: Record<string, unknown>): AppUs
   };
 }
 
-export function authErrorMessage(err: unknown): string {
+export function authErrorKey(err: unknown): string {
   const code =
     typeof err === "object" && err && "code" in err ? String((err as { code: string }).code) : "";
   if (code.includes("invalid-credential") || code.includes("wrong-password") || code.includes("user-not-found")) {
-    return "Email or password is incorrect.";
+    return "auth.badCredentials";
   }
-  if (code.includes("invalid-email")) return "Enter a valid email address.";
-  if (code.includes("too-many-requests")) return "Too many attempts. Wait a moment and try again.";
-  if (code.includes("network-request-failed")) return "Network error. Check your internet connection.";
-  if (code.includes("configuration-not-found")) {
-    return "Firebase Authentication is not enabled for this project yet.";
-  }
-  if (err instanceof Error && err.message) return err.message;
-  return "Login failed.";
+  if (code.includes("invalid-email")) return "auth.badEmail";
+  if (code.includes("too-many-requests")) return "auth.tooMany";
+  if (code.includes("network-request-failed")) return "auth.network";
+  if (code.includes("configuration-not-found")) return "auth.noAuth";
+  return "auth.failed";
+}
+
+export function authErrorMessage(err: unknown): string {
+  const key = authErrorKey(err);
+  const fallback: Record<string, string> = {
+    "auth.badCredentials": "Email or password is incorrect.",
+    "auth.badEmail": "Enter a valid email address.",
+    "auth.tooMany": "Too many attempts. Wait a moment and try again.",
+    "auth.network": "Network error. Check your internet connection.",
+    "auth.noAuth": "Firebase Authentication is not enabled for this project yet.",
+    "auth.failed": "Login failed.",
+  };
+  return fallback[key] ?? (err instanceof Error ? err.message : "Login failed.");
 }

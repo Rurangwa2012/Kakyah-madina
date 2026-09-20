@@ -47,6 +47,7 @@ export type AuditAction =
   | "MENU_UPDATED"
   | "MENU_PRICE_CHANGED"
   | "MENU_ARCHIVED"
+  | "MENU_DELETED"
   | "EXPENSE_CREATED"
   | "EMPLOYEE_CREATED"
   | "EMPLOYEE_UPDATED"
@@ -73,6 +74,7 @@ export interface MenuItem {
   available: boolean;
   sold_out: boolean;
   archived: boolean;
+  is_extra: boolean;
   sort_order: number;
   created_at: number;
   updated_at: number;

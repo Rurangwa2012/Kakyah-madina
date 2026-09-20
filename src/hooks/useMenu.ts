@@ -8,11 +8,14 @@ export function useMenu() {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    const unsub = listenMenu((next) => {
-      setItems(next.filter((item) => !item.archived));
+    try {
+      return listenMenu((next) => {
+        setItems(next.filter((item) => !item.archived));
+        setLoading(false);
+      });
+    } catch {
       setLoading(false);
-    });
-    return unsub;
+    }
   }, []);
   return { items, loading };
 }

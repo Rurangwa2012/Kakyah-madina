@@ -1,3 +1,5 @@
+import type { MenuItem } from "@/types";
+
 export function inventoryStatus(
   quantity: number,
   minStock: number,
@@ -9,6 +11,10 @@ export function inventoryStatus(
 
 export function formatOrderNumber(prefix: string, value: number): string {
   return `${prefix}-${String(value).padStart(4, "0")}`;
+}
+
+export function isExtraItem(item: Pick<MenuItem, "category"> & { is_extra?: boolean }): boolean {
+  return item.is_extra === true || item.category === "Extras";
 }
 
 export function cn(...classes: Array<string | false | null | undefined>): string {

@@ -13,11 +13,12 @@ import {
 } from "@/services/inventory";
 import { formatDateTime } from "@/utils/date";
 import { cn } from "@/utils/format";
+import { useI18n } from "@/i18n/I18nProvider";
 import type { InventoryItem, StockMovement, StockMovementType } from "@/types";
 
 export default function InventoryPage() {
   return (
-    <ProtectedPage allow={["owner", "cashier"]}>
+    <ProtectedPage allow={["owner", "cashier"]} requireInventory>
       <InventoryView />
     </ProtectedPage>
   );
@@ -25,6 +26,7 @@ export default function InventoryPage() {
 
 function InventoryView() {
   const { profile } = useAuth();
+  const { t } = useI18n();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [history, setHistory] = useState<StockMovement[]>([]);
   const [selected, setSelected] = useState<InventoryItem | null>(null);
@@ -58,15 +60,22 @@ function InventoryView() {
 
   return (
     <div>
-      <PageHeader title="Inventory" subtitle="Stock changes always write a movement history record." />
+      <PageHeader title={t("inventory.title")} subtitle={t("inventory.subtitle")} />
       {items.length === 0 ? (
-        <EmptyState title="No stock items" body="Owner can add rice, chicken, oil, boxes and more." />
+        <EmptyState title={t("inventory.empty")} body={t("inventory.emptyBody")} />
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-[var(--line)] bg-white">
-          <table className="min-w-full text-left text-sm">
+          <table className="min-w-full text-start text-sm">
             <thead className="bg-[var(--paper)]">
               <tr>
-                {["Item", "Quantity", "Unit", "Minimum", "Status", "Last Updated"].map((h) => (
+                {[
+                  t("inventory.item"),
+                  t("inventory.qty"),
+                  t("inventory.unit"),
+                  t("inventory.min"),
+                  t("inventory.status"),
+                  t("inventory.updated"),
+                ].map((h) => (
                   <th key={h} className="px-3 py-3">
                     {h}
                   </th>
@@ -96,7 +105,11 @@ function InventoryView() {
                         item.status === "out" && "bg-red-100 text-red-800",
                       )}
                     >
-                      {item.status === "good" ? "Good" : item.status === "low" ? "Low Stock" : "Out of Stock"}
+                      {item.status === "good"
+                        ? t("inventory.good")
+                        : item.status === "low"
+                          ? t("inventory.low")
+                          : t("inventory.out")}
                     </span>
                   </td>
                   <td className="px-3 py-3">{formatDateTime(item.last_updated)}</td>
@@ -108,35 +121,35 @@ function InventoryView() {
       )}
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <Card>
-          <h3 className="font-display text-2xl">Add / record stock</h3>
+          <h3 className="font-display text-2xl">{t("inventory.addRecord")}</h3>
           {selected ? (
             <p className="mb-3 text-sm text-[var(--muted)]">
-              {selected.name} current: {selected.quantity} {selected.unit}
+              {selected.name} {t("inventory.current")}: {selected.quantity} {selected.unit}
             </p>
           ) : (
-            <p className="mb-3 text-sm text-[var(--muted)]">Select a row first.</p>
+            <p className="mb-3 text-sm text-[var(--muted)]">{t("inventory.select")}</p>
           )}
           <form onSubmit={onMove} className="space-y-3">
             <div>
-              <label>Type</label>
+              <label>{t("inventory.type")}</label>
               <select value={type} onChange={(e) => setType(e.target.value as StockMovementType)}>
-                <option value="stock_in">Stock in</option>
-                <option value="waste">Waste</option>
-                <option value="stock_out">Stock out</option>
-                <option value="buffet_use">Buffet use</option>
-                {profile?.role === "owner" ? <option value="correction">Correction</option> : null}
+                <option value="stock_in">{t("inventory.stockIn")}</option>
+                <option value="waste">{t("inventory.waste")}</option>
+                <option value="stock_out">{t("inventory.stockOut")}</option>
+                <option value="buffet_use">{t("inventory.buffetUse")}</option>
+                {profile?.role === "owner" ? <option value="correction">{t("inventory.correction")}</option> : null}
               </select>
             </div>
             <div>
-              <label>Quantity received / used</label>
+              <label>{t("inventory.qtyReceived")}</label>
               <input type="number" min={0} step="0.01" value={qty} onChange={(e) => setQty(Number(e.target.value))} />
             </div>
             <div>
-              <label>Note</label>
+              <label>{t("inventory.note")}</label>
               <input value={note} onChange={(e) => setNote(e.target.value)} />
             </div>
             <Button type="submit" disabled={!selected}>
-              SAVE
+              {t("save")}
             </Button>
             {selected ? (
               <div className="flex gap-2">
@@ -144,20 +157,20 @@ function InventoryView() {
                   variant="ghost"
                   onClick={() => void markInventoryStatus(selected, "low")}
                 >
-                  Mark low
+                  {t("inventory.markLow")}
                 </Button>
                 <Button
                   variant="danger"
                   onClick={() => void markInventoryStatus(selected, "out")}
                 >
-                  Mark out
+                  {t("inventory.markOut")}
                 </Button>
               </div>
             ) : null}
           </form>
         </Card>
         <Card>
-          <h3 className="font-display text-2xl">Movement history</h3>
+          <h3 className="font-display text-2xl">{t("inventory.history")}</h3>
           <div className="mt-3 max-h-80 space-y-2 overflow-auto text-sm">
             {history.map((row) => (
               <p key={row.id}>
@@ -170,26 +183,26 @@ function InventoryView() {
       </div>
       {profile?.role === "owner" ? (
         <Card className="mt-4">
-          <h3 className="font-display text-2xl">Add inventory item</h3>
+          <h3 className="font-display text-2xl">{t("inventory.addItem")}</h3>
           <form onSubmit={createItem} className="mt-3 grid gap-3 md:grid-cols-4">
             <input
-              placeholder="Name"
+              placeholder={t("employees.name")}
               value={newItem.name}
               onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
               required
             />
             <input
-              placeholder="Unit"
+              placeholder={t("inventory.unit")}
               value={newItem.unit}
               onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
             />
             <input
               type="number"
-              placeholder="Qty"
+              placeholder={t("inventory.qty")}
               value={newItem.quantity}
               onChange={(e) => setNewItem({ ...newItem, quantity: Number(e.target.value) })}
             />
-            <Button type="submit">Add item</Button>
+            <Button type="submit">{t("menu.addItem")}</Button>
           </form>
         </Card>
       ) : null}

@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/hooks/useAuth";
+import { I18nProvider } from "@/i18n/I18nProvider";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -27,9 +29,14 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <I18nProvider>
+          <AuthProvider>
+            <LanguageSwitcher />
+            {children}
+          </AuthProvider>
+        </I18nProvider>
       </body>
     </html>
   );

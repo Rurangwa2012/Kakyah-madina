@@ -6,6 +6,7 @@ import { Button, Card, PageHeader } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { listenBuffet, saveBuffetRow } from "@/services/inventory";
 import { toDateKey } from "@/utils/date";
+import { useI18n } from "@/i18n/I18nProvider";
 import type { BuffetTracking } from "@/types";
 
 export default function BuffetPage() {
@@ -18,6 +19,7 @@ export default function BuffetPage() {
 
 function BuffetView() {
   const { profile } = useAuth();
+  const { t } = useI18n();
   const [rows, setRows] = useState<BuffetTracking[]>([]);
   const [form, setForm] = useState({
     date_key: toDateKey(),
@@ -37,26 +39,28 @@ function BuffetView() {
 
   return (
     <div>
-      <PageHeader title="Buffet tracking" subtitle="Prepared, sold, waste and remaining for each food." />
+      <PageHeader title={t("buffet.title")} subtitle={t("buffet.subtitle")} />
       <Card className="mb-4">
         <form onSubmit={onSubmit} className="grid gap-3 md:grid-cols-5">
           <input type="date" value={form.date_key} onChange={(e) => setForm({ ...form, date_key: e.target.value })} />
-          <input value={form.food} onChange={(e) => setForm({ ...form, food: e.target.value })} />
-          <input type="number" value={form.prepared} onChange={(e) => setForm({ ...form, prepared: Number(e.target.value) })} />
-          <input type="number" value={form.sold} onChange={(e) => setForm({ ...form, sold: Number(e.target.value) })} />
-          <input type="number" value={form.waste} onChange={(e) => setForm({ ...form, waste: Number(e.target.value) })} />
-          <Button type="submit">Save tracking</Button>
+          <input value={form.food} onChange={(e) => setForm({ ...form, food: e.target.value })} placeholder={t("buffet.food")} />
+          <input type="number" value={form.prepared} onChange={(e) => setForm({ ...form, prepared: Number(e.target.value) })} placeholder={t("buffet.prepared")} />
+          <input type="number" value={form.sold} onChange={(e) => setForm({ ...form, sold: Number(e.target.value) })} placeholder={t("buffet.sold")} />
+          <input type="number" value={form.waste} onChange={(e) => setForm({ ...form, waste: Number(e.target.value) })} placeholder={t("buffet.waste")} />
+          <Button type="submit">{t("buffet.save")}</Button>
         </form>
       </Card>
       <div className="overflow-x-auto rounded-2xl border border-[var(--line)] bg-white">
-        <table className="min-w-full text-left text-sm">
+        <table className="min-w-full text-start text-sm">
           <thead className="bg-[var(--paper)]">
             <tr>
-              {["Date", "Food", "Prepared", "Sold", "Waste", "Remaining"].map((h) => (
-                <th key={h} className="px-3 py-3">
-                  {h}
-                </th>
-              ))}
+              {[t("buffet.date"), t("buffet.food"), t("buffet.prepared"), t("buffet.sold"), t("buffet.waste"), t("buffet.remaining")].map(
+                (h) => (
+                  <th key={h} className="px-3 py-3">
+                    {h}
+                  </th>
+                ),
+              )}
             </tr>
           </thead>
           <tbody>

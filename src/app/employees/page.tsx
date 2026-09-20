@@ -6,6 +6,7 @@ import { Button, Card, PageHeader } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { listenUsers, saveEmployee } from "@/services/catalog";
 import type { AppUser, UserRole } from "@/types";
+import { useI18n } from "@/i18n/I18nProvider";
 
 export default function EmployeesPage() {
   return (
@@ -17,6 +18,7 @@ export default function EmployeesPage() {
 
 function Employees() {
   const { profile } = useAuth();
+  const { t } = useI18n();
   const [users, setUsers] = useState<AppUser[]>([]);
   const [form, setForm] = useState({
     id: "",
@@ -45,34 +47,31 @@ function Employees() {
 
   return (
     <div>
-      <PageHeader
-        title="Employees"
-        subtitle="Create the person in Firebase Authentication first, then save their UID here."
-      />
+      <PageHeader title={t("employees.title")} subtitle={t("employees.subtitle")} />
       <Card className="mb-4">
         <form onSubmit={onSubmit} className="grid gap-3 md:grid-cols-2">
           <input
             required
-            placeholder="Firebase UID"
+            placeholder={t("employees.uid")}
             value={form.id}
             onChange={(e) => setForm({ ...form, id: e.target.value })}
           />
           <input
             required
-            placeholder="Name"
+            placeholder={t("employees.name")}
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
           <input
             required
             type="email"
-            placeholder="Email"
+            placeholder={t("email")}
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
           <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}>
-            <option value="cashier">cashier</option>
-            <option value="owner">owner</option>
+            <option value="cashier">{t("role.cashier")}</option>
+            <option value="owner">{t("role.owner")}</option>
           </select>
           <label className="flex items-center gap-2">
             <input
@@ -80,7 +79,7 @@ function Employees() {
               checked={form.inventory_access}
               onChange={(e) => setForm({ ...form, inventory_access: e.target.checked })}
             />
-            Inventory access
+            {t("employees.inventory")}
           </label>
           <label className="flex items-center gap-2">
             <input
@@ -88,9 +87,9 @@ function Employees() {
               checked={form.active}
               onChange={(e) => setForm({ ...form, active: e.target.checked })}
             />
-            Active
+            {t("employees.active")}
           </label>
-          <Button type="submit">Save employee</Button>
+          <Button type="submit">{t("employees.save")}</Button>
         </form>
       </Card>
       <div className="space-y-3">
@@ -98,10 +97,10 @@ function Employees() {
           <Card key={user.id} className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="font-bold">
-                {user.name} · {user.role}
+                {user.name} · {user.role === "owner" ? t("role.owner") : t("role.cashier")}
               </p>
               <p className="text-sm text-[var(--muted)]">
-                {user.email} · {user.active ? "Active" : "Disabled"}
+                {user.email} · {user.active ? t("employees.active") : t("employees.disable")}
               </p>
             </div>
             {profile ? (
@@ -112,7 +111,7 @@ function Employees() {
                     void saveEmployee({ ...user, active: !user.active }, profile)
                   }
                 >
-                  {user.active ? "Disable" : "Enable"}
+                  {user.active ? t("employees.disable") : t("employees.enable")}
                 </Button>
                 <Button
                   variant="secondary"
@@ -123,7 +122,7 @@ function Employees() {
                     )
                   }
                 >
-                  Switch role
+                  {t("employees.switchRole")}
                 </Button>
               </div>
             ) : null}

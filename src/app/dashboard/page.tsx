@@ -3,14 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/ProtectedPage";
 import { Button, Card, PageHeader } from "@/components/ui";
-import { listenDailySummaries, emptySummary } from "@/services/finance";
-import { listenInventory, listenBuffet } from "@/services/inventory";
-import { listenRecentOrders, listenGroupOrders } from "@/services/orders";
-import { listenAuditLogs } from "@/services/finance";
-import { listenMenu } from "@/services/catalog";
+import { emptySummary, listenAuditLogs, listenDailySummaries } from "@/services/finance";
+import { listenBuffet, listenInventory } from "@/services/inventory";
+import { listenGroupOrders, listenRecentOrders } from "@/services/orders";
 import { formatSar } from "@/utils/money";
 import { formatDateTime, rangeForFilter, toDateKey, type DateFilter } from "@/utils/date";
-import type { AuditLog, BuffetTracking, DailySummary, GroupOrder, InventoryItem, MenuItem, StudentOrder } from "@/types";
+import { useI18n } from "@/i18n/I18nProvider";
+import type { AuditLog, BuffetTracking, DailySummary, GroupOrder, InventoryItem, StudentOrder } from "@/types";
 
 export default function DashboardPage() {
   return (
@@ -21,6 +20,7 @@ export default function DashboardPage() {
 }
 
 function Dashboard() {
+  const { t } = useI18n();
   const [filter, setFilter] = useState<DateFilter>("today");
   const [customStart, setCustomStart] = useState(toDateKey());
   const [customEnd, setCustomEnd] = useState(toDateKey());
@@ -30,7 +30,6 @@ function Dashboard() {
   const [groups, setGroups] = useState<GroupOrder[]>([]);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [buffet, setBuffet] = useState<BuffetTracking[]>([]);
-  const [menu, setMenu] = useState<MenuItem[]>([]);
 
   const range = rangeForFilter(filter, customStart, customEnd);
   const startKey = toDateKey(new Date(range.start));
@@ -42,7 +41,6 @@ function Dashboard() {
   useEffect(() => listenGroupOrders(setGroups), []);
   useEffect(() => listenAuditLogs(setLogs), []);
   useEffect(() => listenBuffet(setBuffet), []);
-  useEffect(() => listenMenu(setMenu), []);
 
   const totals = useMemo(() => {
     return summaries.reduce((acc, row) => {
@@ -66,22 +64,24 @@ function Dashboard() {
   const best = useMemo(() => {
     const counts = new Map<string, number>();
     for (const order of orders) {
+      if (order.created_at < range.start || order.created_at > range.end) continue;
       for (const line of order.lines) {
         counts.set(line.name, (counts.get(line.name) ?? 0) + line.quantity);
       }
     }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
-  }, [orders]);
+  }, [orders, range]);
+  const wasteRows = buffet.filter((row) => row.date_key >= startKey && row.date_key <= endKey).slice(0, 8);
 
   const maxSales = Math.max(totals.cash_sales_halalas, totals.card_sales_halalas, totals.mobile_sales_halalas, 1);
 
   return (
     <div>
-      <PageHeader title="Owner dashboard" subtitle="Live view of Kak Yah Madina" />
+      <PageHeader title={t("dashboard.title")} subtitle={t("dashboard.subtitle")} />
       <div className="mb-4 flex flex-wrap gap-2">
         {(["today", "yesterday", "week", "month", "custom"] as DateFilter[]).map((key) => (
           <Button key={key} variant={filter === key ? "primary" : "ghost"} onClick={() => setFilter(key)}>
-            {key === "week" ? "This Week" : key === "month" ? "This Month" : key}
+            {t(key)}
           </Button>
         ))}
         {filter === "custom" ? (
@@ -92,26 +92,26 @@ function Dashboard() {
         ) : null}
       </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label="Total Sales" value={formatSar(totals.total_sales_halalas)} />
-        <Stat label="Total Orders" value={String(totals.order_count)} />
-        <Stat label="Student Orders" value={String(totals.student_order_count)} />
-        <Stat label="Group Orders" value={String(totals.group_order_count)} />
-        <Stat label="Cash Sales" value={formatSar(totals.cash_sales_halalas)} />
-        <Stat label="Card Sales" value={formatSar(totals.card_sales_halalas)} />
-        <Stat label="Mobile Payment" value={formatSar(totals.mobile_sales_halalas)} />
-        <Stat label="Today's Expenses" value={formatSar(totals.expenses_halalas)} />
-        <Stat label="Estimated Profit" value={formatSar(profit)} />
+        <Stat label={t("dashboard.totalSales")} value={formatSar(totals.total_sales_halalas)} />
+        <Stat label={t("dashboard.totalOrders")} value={String(totals.order_count)} />
+        <Stat label={t("dashboard.studentOrders")} value={String(totals.student_order_count)} />
+        <Stat label={t("dashboard.groupOrders")} value={String(totals.group_order_count)} />
+        <Stat label={t("dashboard.cashSales")} value={formatSar(totals.cash_sales_halalas)} />
+        <Stat label={t("dashboard.cardSales")} value={formatSar(totals.card_sales_halalas)} />
+        <Stat label={t("dashboard.mobileSales")} value={formatSar(totals.mobile_sales_halalas)} />
+        <Stat label={t("dashboard.expenses")} value={formatSar(totals.expenses_halalas)} />
+        <Stat label={t("dashboard.profit")} value={formatSar(profit)} />
       </div>
       <Card className="mt-4">
-        <h3 className="font-display text-xl">Payment mix</h3>
-        <Bar label="Cash" value={totals.cash_sales_halalas} max={maxSales} />
-        <Bar label="Card" value={totals.card_sales_halalas} max={maxSales} />
-        <Bar label="Mobile" value={totals.mobile_sales_halalas} max={maxSales} />
+        <h3 className="font-display text-xl">{t("dashboard.mix")}</h3>
+        <Bar label={t("cash")} value={totals.cash_sales_halalas} max={maxSales} />
+        <Bar label={t("card")} value={totals.card_sales_halalas} max={maxSales} />
+        <Bar label={t("mobile")} value={totals.mobile_sales_halalas} max={maxSales} />
       </Card>
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card>
-          <h3 className="font-display text-xl">Low stock</h3>
-          {low.length === 0 ? <p className="text-sm text-[var(--muted)]">All good.</p> : null}
+          <h3 className="font-display text-xl">{t("dashboard.lowStock")}</h3>
+          {low.length === 0 ? <p className="text-sm text-[var(--muted)]">{t("dashboard.allGood")}</p> : null}
           {low.map((item) => (
             <p key={item.id}>
               {item.name}: {item.quantity} {item.unit} ({item.status})
@@ -119,7 +119,7 @@ function Dashboard() {
           ))}
         </Card>
         <Card>
-          <h3 className="font-display text-xl">Upcoming group orders</h3>
+          <h3 className="font-display text-xl">{t("dashboard.upcoming")}</h3>
           {upcoming.map((order) => (
             <p key={order.id}>
               {order.order_number} · {order.group_name} · {order.quantity}
@@ -127,7 +127,7 @@ function Dashboard() {
           ))}
         </Card>
         <Card>
-          <h3 className="font-display text-xl">Recent orders</h3>
+          <h3 className="font-display text-xl">{t("dashboard.recent")}</h3>
           {orders.slice(0, 8).map((order) => (
             <p key={order.id}>
               {order.order_number} · {formatSar(order.total_halalas)}
@@ -135,7 +135,7 @@ function Dashboard() {
           ))}
         </Card>
         <Card>
-          <h3 className="font-display text-xl">Recent employee activity</h3>
+          <h3 className="font-display text-xl">{t("dashboard.activity")}</h3>
           {logs.slice(0, 8).map((log) => (
             <p key={log.id} className="text-sm">
               {formatDateTime(log.created_at)} — {log.message}
@@ -143,19 +143,19 @@ function Dashboard() {
           ))}
         </Card>
         <Card>
-          <h3 className="font-display text-xl">Best selling items</h3>
+          <h3 className="font-display text-xl">{t("dashboard.best")}</h3>
           {best.map(([name, qty]) => (
             <p key={name}>
               {name}: {qty}
             </p>
           ))}
-          {menu.length === 0 ? <p className="text-sm text-[var(--muted)]">No sales yet.</p> : null}
+          {best.length === 0 ? <p className="text-sm text-[var(--muted)]">{t("dashboard.noSales")}</p> : null}
         </Card>
         <Card>
-          <h3 className="font-display text-xl">Buffet waste</h3>
-          {buffet.slice(0, 8).map((row) => (
+          <h3 className="font-display text-xl">{t("dashboard.waste")}</h3>
+          {wasteRows.map((row) => (
             <p key={row.id}>
-              {row.food}: waste {row.waste}, remaining {row.remaining}
+              {row.food}: {t("buffet.waste")} {row.waste}, {t("buffet.remaining")} {row.remaining}
             </p>
           ))}
         </Card>

@@ -2,8 +2,6 @@ import {
   collection,
   doc,
   getDoc,
-  onSnapshot,
-  orderBy,
   query,
   runTransaction,
   serverTimestamp,
@@ -15,6 +13,7 @@ import {
 import { COLLECTIONS } from "@/lib/collections";
 import { getDb } from "@/lib/firebase";
 import { writeAuditLog } from "@/lib/firestore";
+import { listenDocs } from "@/lib/listen";
 import { inventoryStatus } from "@/utils/format";
 import type {
   AppUser,
@@ -25,11 +24,10 @@ import type {
 } from "@/types";
 
 export function listenInventory(cb: (items: InventoryItem[]) => void): Unsubscribe {
-  return onSnapshot(
-    query(collection(getDb(), COLLECTIONS.inventory), orderBy("name", "asc")),
-    (snap) => {
-      cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<InventoryItem, "id">) })));
-    },
+  return listenDocs(
+    collection(getDb(), COLLECTIONS.inventory),
+    (id, data) => ({ id, ...(data as Omit<InventoryItem, "id">) }),
+    (items) => cb([...items].sort((a, b) => a.name.localeCompare(b.name))),
   );
 }
 
@@ -38,16 +36,12 @@ export function listenStockMovements(
   cb: (rows: StockMovement[]) => void,
 ): Unsubscribe {
   const base = collection(getDb(), COLLECTIONS.stockMovements);
-  const q = inventoryId
-    ? query(base, where("inventory_id", "==", inventoryId), orderBy("created_at", "desc"))
-    : query(base, orderBy("created_at", "desc"));
-  return onSnapshot(q, (snap) => {
-    cb(
-      snap.docs
-        .slice(0, 100)
-        .map((d) => ({ id: d.id, ...(d.data() as Omit<StockMovement, "id">) })),
-    );
-  });
+  const q = inventoryId ? query(base, where("inventory_id", "==", inventoryId)) : query(base);
+  return listenDocs(
+    q,
+    (id, data) => ({ id, ...(data as Omit<StockMovement, "id">) }),
+    (rows) => cb([...rows].sort((a, b) => b.created_at - a.created_at).slice(0, 100)),
+  );
 }
 
 export async function applyStockChange(input: {
@@ -65,9 +59,11 @@ export async function applyStockChange(input: {
     if (!snap.exists()) throw new Error("Inventory item not found");
     const item = snap.data() as InventoryItem;
     const delta =
-      input.type === "stock_in" || input.type === "correction"
+      input.type === "correction"
         ? input.quantity
-        : -Math.abs(input.quantity);
+        : input.type === "stock_in"
+          ? Math.abs(input.quantity)
+          : -Math.abs(input.quantity);
     const previous = Number(item.quantity ?? 0);
     const nextQty = Math.max(0, previous + delta);
     tx.update(invRef, {
@@ -141,11 +137,10 @@ export async function saveInventoryItem(
 }
 
 export function listenBuffet(cb: (rows: BuffetTracking[]) => void): Unsubscribe {
-  return onSnapshot(
-    query(collection(getDb(), COLLECTIONS.buffetTracking), orderBy("created_at", "desc")),
-    (snap) => {
-      cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<BuffetTracking, "id">) })));
-    },
+  return listenDocs(
+    collection(getDb(), COLLECTIONS.buffetTracking),
+    (id, data) => ({ id, ...(data as Omit<BuffetTracking, "id">) }),
+    (rows) => cb([...rows].sort((a, b) => b.created_at - a.created_at)),
   );
 }
 
@@ -162,8 +157,10 @@ export async function saveBuffetRow(
 ): Promise<void> {
   const remaining = Math.max(0, row.prepared - row.sold - row.waste);
   const id = row.id ?? `${row.date_key}-${row.food}`.replace(/\s+/g, "-").toLowerCase();
+  const ref = doc(getDb(), COLLECTIONS.buffetTracking, id);
+  const existing = await getDoc(ref);
   await setDoc(
-    doc(getDb(), COLLECTIONS.buffetTracking, id),
+    ref,
     {
       date_key: row.date_key,
       food: row.food,
@@ -173,7 +170,7 @@ export async function saveBuffetRow(
       remaining,
       created_by: actor.id,
       created_by_name: actor.name,
-      created_at: Date.now(),
+      created_at: existing.exists() ? (existing.data()?.created_at ?? Date.now()) : Date.now(),
       updated_at: Date.now(),
     },
     { merge: true },

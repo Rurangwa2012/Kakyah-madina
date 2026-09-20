@@ -9,26 +9,22 @@ import {
 } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
-function requiredEnv(name: string): string {
-  return process.env[name] ?? "";
+export function getFirebaseConfig() {
+  return {
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "",
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "",
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "",
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? "",
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "",
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "",
+  };
 }
 
-export const firebaseConfig = {
-  apiKey: requiredEnv("NEXT_PUBLIC_FIREBASE_API_KEY"),
-  authDomain: requiredEnv("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN"),
-  projectId: requiredEnv("NEXT_PUBLIC_FIREBASE_PROJECT_ID"),
-  storageBucket: requiredEnv("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET"),
-  messagingSenderId: requiredEnv("NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID"),
-  appId: requiredEnv("NEXT_PUBLIC_FIREBASE_APP_ID"),
-};
+export const firebaseConfig = getFirebaseConfig();
 
 export function isFirebaseConfigured(): boolean {
-  return Boolean(
-    firebaseConfig.apiKey &&
-      firebaseConfig.authDomain &&
-      firebaseConfig.projectId &&
-      firebaseConfig.appId,
-  );
+  const config = getFirebaseConfig();
+  return Boolean(config.apiKey && config.authDomain && config.projectId && config.appId);
 }
 
 let app: FirebaseApp | undefined;
@@ -43,7 +39,7 @@ export function getFirebaseApp(): FirebaseApp {
     );
   }
   if (!app) {
-    app = getApps()[0] ?? initializeApp(firebaseConfig);
+    app = getApps()[0] ?? initializeApp(getFirebaseConfig());
   }
   return app;
 }

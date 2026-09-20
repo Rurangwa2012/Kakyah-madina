@@ -10,6 +10,7 @@ import { printerService, studentReceiptHtml } from "@/services/printer";
 import { writeAuditLog } from "@/lib/firestore";
 import { formatDateTime } from "@/utils/date";
 import { formatSar } from "@/utils/money";
+import { useI18n } from "@/i18n/I18nProvider";
 import type { StudentOrder } from "@/types";
 
 export default function OrdersPage() {
@@ -22,7 +23,9 @@ export default function OrdersPage() {
 
 function OrdersView() {
   const { profile } = useAuth();
+  const { t } = useI18n();
   const [orders, setOrders] = useState<StudentOrder[]>([]);
+  const [busyId, setBusyId] = useState("");
   const isOwner = profile?.role === "owner";
 
   useEffect(() => {
@@ -31,32 +34,58 @@ function OrdersView() {
 
   async function reprint(order: StudentOrder) {
     if (!profile) return;
-    const settings = await getSettings();
-    await printerService.printHtml(studentReceiptHtml(order, settings));
-    await writeAuditLog({
-      action: "RECEIPT_REPRINTED",
-      message: `${profile.name} reprinted ${order.order_number}`,
-      actor_id: profile.id,
-      actor_name: profile.name,
-      actor_role: profile.role,
-    });
+    setBusyId(order.id);
+    try {
+      const settings = await getSettings();
+      await printerService.printHtml(studentReceiptHtml(order, settings));
+      await writeAuditLog({
+        action: "RECEIPT_REPRINTED",
+        message: `${profile.name} reprinted ${order.order_number}`,
+        actor_id: profile.id,
+        actor_name: profile.name,
+        actor_role: profile.role,
+      });
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function closeOrder(order: StudentOrder, refund: boolean) {
+    if (!profile) return;
+    setBusyId(order.id);
+    try {
+      await cancelStudentOrder(order, profile, refund);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : t("somethingWrong"));
+    } finally {
+      setBusyId("");
+    }
   }
 
   return (
     <div>
       <PageHeader
-        title={isOwner ? "Orders" : "Today's Orders"}
-        subtitle="Student orders use S- numbers. Group orders stay on the Group Orders page."
+        title={isOwner ? t("orders.title") : t("orders.todayTitle")}
+        subtitle={t("orders.subtitle")}
       />
       {orders.length === 0 ? (
-        <EmptyState title="No student orders yet" body="Completed POS sales will appear here." />
+        <EmptyState title={t("orders.empty")} body={t("orders.emptyBody")} />
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-[var(--line)] bg-white">
-          <table className="min-w-full text-left text-sm">
+          <table className="min-w-full text-start text-sm">
             <thead className="bg-[var(--paper)]">
               <tr>
-                {["Number", "Items", "Total", "Payment", "Cashier", "Time", "Status", ""].map((h) => (
-                  <th key={h} className="px-3 py-3">
+                {[
+                  t("orders.number"),
+                  t("orders.items"),
+                  t("orders.total"),
+                  t("orders.payment"),
+                  t("orders.cashier"),
+                  t("orders.time"),
+                  t("orders.status"),
+                  "",
+                ].map((h) => (
+                  <th key={h || "actions"} className="px-3 py-3">
                     {h}
                   </th>
                 ))}
@@ -76,24 +105,31 @@ function OrdersView() {
                   <td className="px-3 py-3">{order.status}</td>
                   <td className="px-3 py-3">
                     <div className="flex flex-wrap gap-2">
-                      <Button variant="ghost" className="min-h-10 text-sm" onClick={() => void reprint(order)}>
-                        Reprint
+                      <Button
+                        variant="ghost"
+                        className="min-h-10 text-sm"
+                        disabled={busyId === order.id}
+                        onClick={() => void reprint(order)}
+                      >
+                        {t("reprint")}
                       </Button>
                       {isOwner && order.status === "completed" ? (
                         <>
                           <Button
                             variant="danger"
                             className="min-h-10 text-sm"
-                            onClick={() => void cancelStudentOrder(order, profile, false)}
+                            disabled={busyId === order.id}
+                            onClick={() => void closeOrder(order, false)}
                           >
-                            Cancel
+                            {t("cancel")}
                           </Button>
                           <Button
                             variant="secondary"
                             className="min-h-10 text-sm"
-                            onClick={() => void cancelStudentOrder(order, profile, true)}
+                            disabled={busyId === order.id}
+                            onClick={() => void closeOrder(order, true)}
                           >
-                            Refund
+                            {t("refund")}
                           </Button>
                         </>
                       ) : null}

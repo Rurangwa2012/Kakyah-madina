@@ -1,10 +1,8 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
-  onSnapshot,
-  orderBy,
-  query,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -14,13 +12,20 @@ import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { COLLECTIONS, SETTINGS_DOC_ID } from "@/lib/collections";
 import { getDb, getFirebaseStorage } from "@/lib/firebase";
 import { writeAuditLog } from "@/lib/firestore";
+import { listenDocs } from "@/lib/listen";
+import { profileFromDoc } from "@/lib/userProfile";
 import type { AppUser, MenuItem, RestaurantSettings } from "@/types";
 
 export function listenMenu(cb: (items: MenuItem[]) => void): Unsubscribe {
-  const q = query(collection(getDb(), COLLECTIONS.menu), orderBy("sort_order", "asc"));
-  return onSnapshot(q, (snap) => {
-    cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<MenuItem, "id">) })));
-  });
+  return listenDocs(
+    collection(getDb(), COLLECTIONS.menu),
+    (id, data) => ({
+      id,
+      ...(data as Omit<MenuItem, "id">),
+      is_extra: Boolean(data.is_extra) || data.category === "Extras",
+    }),
+    (items) => cb([...items].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))),
+  );
 }
 
 export async function saveMenuItem(
@@ -38,6 +43,7 @@ export async function saveMenuItem(
     available: item.available ?? true,
     sold_out: item.sold_out ?? false,
     archived: item.archived ?? false,
+    is_extra: item.is_extra ?? item.category === "Extras",
     sort_order: item.sort_order ?? 100,
     updated_at: Date.now(),
     server_updated_at: serverTimestamp(),
@@ -90,9 +96,21 @@ export async function archiveMenuItem(id: string, actor: AppUser, name: string):
   });
 }
 
+export async function deleteMenuItem(id: string, actor: AppUser, name: string): Promise<void> {
+  await deleteDoc(doc(getDb(), COLLECTIONS.menu, id));
+  await writeAuditLog({
+    action: "MENU_DELETED",
+    message: `${actor.name} deleted menu item ${name}`,
+    actor_id: actor.id,
+    actor_name: actor.name,
+    actor_role: actor.role,
+  });
+}
+
 export async function uploadMenuImage(file: File, itemId: string): Promise<string> {
-  const storageRef = ref(getFirebaseStorage(), `menu/${itemId}/${file.name}`);
-  await uploadBytes(storageRef, file);
+  const safeName = file.name.replace(/[^a-zA-Z0-9.\-]/g, "_");
+  const storageRef = ref(getFirebaseStorage(), `menu/${itemId}/${Date.now()}-${safeName}`);
+  await uploadBytes(storageRef, file, { contentType: file.type || "image/jpeg" });
   return getDownloadURL(storageRef);
 }
 
@@ -131,11 +149,10 @@ export async function saveSettings(settings: RestaurantSettings, actor: AppUser)
 }
 
 export function listenUsers(cb: (users: AppUser[]) => void): Unsubscribe {
-  return onSnapshot(
-    query(collection(getDb(), COLLECTIONS.users), orderBy("created_at", "desc")),
-    (snap) => {
-      cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<AppUser, "id">) })));
-    },
+  return listenDocs(
+    collection(getDb(), COLLECTIONS.users),
+    (id, data) => profileFromDoc(id, data),
+    (users) => cb([...users].sort((a, b) => b.created_at - a.created_at)),
   );
 }
 

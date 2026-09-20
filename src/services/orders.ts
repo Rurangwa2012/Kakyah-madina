@@ -2,9 +2,10 @@ import {
   addDoc,
   collection,
   doc,
-  onSnapshot,
+  limit,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   updateDoc,
   where,
@@ -13,6 +14,7 @@ import {
 import { GROUP_COUNTER_ID, STUDENT_COUNTER_ID, COLLECTIONS } from "@/lib/collections";
 import { getDb } from "@/lib/firebase";
 import { bumpDailySummary, nextOrderNumber, paymentIncrement, writeAuditLog } from "@/lib/firestore";
+import { listenDocs } from "@/lib/listen";
 import { toDateKey } from "@/utils/date";
 import { applyDiscount, orderSubtotal } from "@/utils/money";
 import type {
@@ -26,25 +28,23 @@ import type {
 } from "@/types";
 
 export function listenTodayOrders(cb: (orders: StudentOrder[]) => void): Unsubscribe {
-  const q = query(
-    collection(getDb(), COLLECTIONS.orders),
-    where("date_key", "==", toDateKey()),
-    orderBy("created_at", "desc"),
+  return listenDocs(
+    query(
+      collection(getDb(), COLLECTIONS.orders),
+      where("date_key", "==", toDateKey()),
+      orderBy("created_at", "desc"),
+    ),
+    (id, data) => ({ id, ...(data as Omit<StudentOrder, "id">) }),
+    cb,
   );
-  return onSnapshot(q, (snap) => {
-    cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<StudentOrder, "id">) })));
-  });
 }
 
 export function listenRecentOrders(cb: (orders: StudentOrder[]) => void): Unsubscribe {
-  const q = query(collection(getDb(), COLLECTIONS.orders), orderBy("created_at", "desc"));
-  return onSnapshot(q, (snap) => {
-    cb(
-      snap.docs
-        .slice(0, 20)
-        .map((d) => ({ id: d.id, ...(d.data() as Omit<StudentOrder, "id">) })),
-    );
-  });
+  return listenDocs(
+    query(collection(getDb(), COLLECTIONS.orders), orderBy("created_at", "desc"), limit(40)),
+    (id, data) => ({ id, ...(data as Omit<StudentOrder, "id">) }),
+    cb,
+  );
 }
 
 export async function createStudentOrder(input: {
@@ -102,17 +102,27 @@ export async function cancelStudentOrder(
   actor: AppUser,
   refund = false,
 ): Promise<void> {
-  await updateDoc(doc(getDb(), COLLECTIONS.orders, order.id), {
-    status: refund ? "refunded" : "cancelled",
-    updated_at: Date.now(),
+  const db = getDb();
+  const orderRef = doc(db, COLLECTIONS.orders, order.id);
+  const current = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(orderRef);
+    if (!snap.exists()) throw new Error("Order not found");
+    const data = snap.data() as StudentOrder;
+    if (data.status !== "completed") throw new Error("Order already closed");
+    tx.update(orderRef, {
+      status: refund ? "refunded" : "cancelled",
+      updated_at: Date.now(),
+    });
+    return data;
   });
-  const reverse = -order.total_halalas;
+  const reverse = -current.total_halalas;
   await bumpDailySummary({
+    dateKey: current.date_key,
     totalSales: reverse,
     studentSales: reverse,
     orderCount: -1,
     studentOrderCount: -1,
-    ...paymentIncrement(order.payment_method, reverse),
+    ...paymentIncrement(current.payment_method, reverse),
   });
   await writeAuditLog({
     action: refund ? "ORDER_REFUNDED" : "ORDER_CANCELLED",
@@ -124,13 +134,11 @@ export async function cancelStudentOrder(
 }
 
 export function listenGroupOrders(cb: (orders: GroupOrder[]) => void): Unsubscribe {
-  const q = query(
+  return listenDocs(
     collection(getDb(), COLLECTIONS.groupOrders),
-    orderBy("pickup_time", "asc"),
+    (id, data) => ({ id, ...(data as Omit<GroupOrder, "id">) }),
+    (orders) => cb([...orders].sort((a, b) => a.pickup_time - b.pickup_time)),
   );
-  return onSnapshot(q, (snap) => {
-    cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<GroupOrder, "id">) })));
-  });
 }
 
 export async function createGroupOrder(input: {
@@ -171,14 +179,15 @@ export async function createGroupOrder(input: {
   const ref = await addDoc(collection(getDb(), COLLECTIONS.groupOrders), payload);
   if (input.payment_status === "paid" && input.total_halalas > 0) {
     await bumpDailySummary({
+      dateKey: payload.date_key,
       totalSales: payload.total_halalas,
       groupSales: payload.total_halalas,
       orderCount: 1,
       groupOrderCount: 1,
-      cashSales: payload.total_halalas,
     });
   } else {
     await bumpDailySummary({
+      dateKey: payload.date_key,
       orderCount: 1,
       groupOrderCount: 1,
     });

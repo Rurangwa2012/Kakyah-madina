@@ -6,6 +6,7 @@ import { Card, PageHeader } from "@/components/ui";
 import { listenAuditLogs } from "@/services/finance";
 import { formatDateTime } from "@/utils/date";
 import type { AuditLog } from "@/types";
+import { useI18n } from "@/i18n/I18nProvider";
 
 export default function ActivityPage() {
   return (
@@ -16,11 +17,12 @@ export default function ActivityPage() {
 }
 
 function Activity() {
+  const { t } = useI18n();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   useEffect(() => listenAuditLogs(setLogs), []);
   return (
     <div>
-      <PageHeader title="Activity logs" subtitle="Cashiers cannot delete this history." />
+      <PageHeader title={t("activity.title")} subtitle={t("activity.subtitle")} />
       <Card>
         <div className="space-y-3">
           {logs.map((log) => (

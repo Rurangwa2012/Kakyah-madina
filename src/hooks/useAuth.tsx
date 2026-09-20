@@ -33,9 +33,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState(true);
   const [profileError, setProfileError] = useState("");
-  const configured = isFirebaseConfigured();
+  const [mounted, setMounted] = useState(false);
+  const configured = mounted ? isFirebaseConfigured() : true;
 
   useEffect(() => {
+    setMounted(true);
     const sync = () => setOnline(navigator.onLine);
     sync();
     window.addEventListener("online", sync);
@@ -47,7 +49,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!configured) {
+    if (!mounted) return;
+    if (!isFirebaseConfigured()) {
       setLoading(false);
       return;
     }
@@ -88,7 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       unsub();
       unsubProfile?.();
     };
-  }, [configured]);
+  }, [mounted]);
 
   const value = useMemo<AuthState>(
     () => ({

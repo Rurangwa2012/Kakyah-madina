@@ -46,6 +46,10 @@ label {
   color: var(--muted);
 }
 
+html[dir="rtl"] body {
+  font-family: "Segoe UI", Tahoma, "Noto Naskh Arabic", sans-serif;
+}
+
 @media print {
   .no-print {
     display: none !important;

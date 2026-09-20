@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ProtectedPage } from "@/components/ProtectedPage";
 import { Button, Card, EmptyState, PageHeader } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,8 +9,8 @@ import { getSettings } from "@/services/catalog";
 import { groupReceiptHtml, printerService } from "@/services/printer";
 import { sarToHalalas } from "@/utils/money";
 import { formatDateTime } from "@/utils/date";
+import { useI18n } from "@/i18n/I18nProvider";
 import type { GroupFulfillment, GroupOrder, GroupPaymentStatus } from "@/types";
-import { useEffect } from "react";
 
 export default function GroupOrdersPage() {
   return (
@@ -22,9 +22,12 @@ export default function GroupOrdersPage() {
 
 function GroupOrders() {
   const { profile } = useAuth();
+  const { t } = useI18n();
   const [orders, setOrders] = useState<GroupOrder[]>([]);
   const [filter, setFilter] = useState<"today" | "upcoming" | "completed">("upcoming");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
   const [form, setForm] = useState({
     group_name: "",
     contact_number: "",
@@ -40,7 +43,6 @@ function GroupOrders() {
   useEffect(() => listenGroupOrders(setOrders), []);
 
   const shown = useMemo(() => {
-    const now = Date.now();
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     const end = new Date();
@@ -48,13 +50,15 @@ function GroupOrders() {
     return orders.filter((order) => {
       if (filter === "completed") return order.status === "completed";
       if (filter === "today") return order.pickup_time >= start.getTime() && order.pickup_time <= end.getTime();
-      return order.status === "pending" && order.pickup_time >= now - 60 * 60 * 1000;
+      return order.status === "pending";
     });
   }, [orders, filter]);
 
   async function save(print: boolean, complete = false) {
     if (!profile) return;
+    if (formRef.current && !formRef.current.reportValidity()) return;
     setBusy(true);
+    setError("");
     try {
       const settings = await getSettings();
       const pickup_time = form.pickup_local ? new Date(form.pickup_local).getTime() : Date.now();
@@ -80,6 +84,8 @@ function GroupOrders() {
         );
       }
       setForm((current) => ({ ...current, group_name: "", contact_number: "", location: "" }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("somethingWrong"));
     } finally {
       setBusy(false);
     }
@@ -93,11 +99,11 @@ function GroupOrders() {
   return (
     <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
       <div>
-        <PageHeader title="Group / Umrah Orders" subtitle="Simple bulk orders. U- prefix." />
+        <PageHeader title={t("group.title")} subtitle={t("group.subtitle")} />
         <Card>
-          <form onSubmit={onSubmit} className="space-y-3">
+          <form ref={formRef} onSubmit={onSubmit} className="space-y-3">
             <div>
-              <label>Customer / Group Name</label>
+              <label>{t("group.name")}</label>
               <input
                 required
                 value={form.group_name}
@@ -105,7 +111,7 @@ function GroupOrders() {
               />
             </div>
             <div>
-              <label>Contact Number</label>
+              <label>{t("group.contact")}</label>
               <input
                 required
                 value={form.contact_number}
@@ -113,7 +119,7 @@ function GroupOrders() {
               />
             </div>
             <div>
-              <label>Location</label>
+              <label>{t("group.location")}</label>
               <input
                 required
                 value={form.location}
@@ -121,7 +127,7 @@ function GroupOrders() {
               />
             </div>
             <div>
-              <label>Food / Order</label>
+              <label>{t("group.food")}</label>
               <input
                 required
                 value={form.food_description}
@@ -129,7 +135,7 @@ function GroupOrders() {
               />
             </div>
             <div>
-              <label>Quantity</label>
+              <label>{t("group.qty")}</label>
               <input
                 type="number"
                 min={1}
@@ -138,7 +144,7 @@ function GroupOrders() {
               />
             </div>
             <div>
-              <label>Pickup or Delivery Time</label>
+              <label>{t("group.time")}</label>
               <input
                 type="datetime-local"
                 value={form.pickup_local}
@@ -146,7 +152,16 @@ function GroupOrders() {
               />
             </div>
             <div>
-              <label>Amount (SAR)</label>
+              <select
+                value={form.fulfillment}
+                onChange={(e) => setForm({ ...form, fulfillment: e.target.value as GroupFulfillment })}
+              >
+                <option value="pickup">{t("group.pickup")}</option>
+                <option value="delivery">{t("group.delivery")}</option>
+              </select>
+            </div>
+            <div>
+              <label>{t("group.amount")}</label>
               <input
                 type="number"
                 min={0}
@@ -156,28 +171,29 @@ function GroupOrders() {
               />
             </div>
             <div>
-              <label>Payment Status</label>
+              <label>{t("group.payment")}</label>
               <select
                 value={form.payment_status}
                 onChange={(e) =>
                   setForm({ ...form, payment_status: e.target.value as GroupPaymentStatus })
                 }
               >
-                <option value="paid">Paid</option>
-                <option value="not_paid">Not Paid</option>
+                <option value="paid">{t("group.paid")}</option>
+                <option value="not_paid">{t("group.notPaid")}</option>
               </select>
             </div>
             <div className="grid gap-2">
               <Button type="submit" disabled={busy}>
-                Save
+                {t("save")}
               </Button>
               <Button variant="secondary" disabled={busy} onClick={() => void save(true)}>
-                Save & Print
+                {t("group.savePrint")}
               </Button>
               <Button variant="pay" disabled={busy} onClick={() => void save(true, true)}>
-                Complete Order
+                {t("group.complete")}
               </Button>
             </div>
+            {error ? <p className="text-sm text-red-700">{error}</p> : null}
           </form>
         </Card>
       </div>
@@ -185,24 +201,32 @@ function GroupOrders() {
         <div className="mb-3 flex gap-2">
           {(["today", "upcoming", "completed"] as const).map((key) => (
             <Button key={key} variant={filter === key ? "primary" : "ghost"} onClick={() => setFilter(key)}>
-              {key}
+              {key === "today" ? t("group.today") : key === "upcoming" ? t("group.upcoming") : t("group.completed")}
             </Button>
           ))}
         </div>
         {shown.length === 0 ? (
-          <EmptyState title="No group orders" body="Create an Umrah or bulk order on the left." />
+          <EmptyState title={t("group.empty")} body={t("group.emptyBody")} />
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-[var(--line)] bg-white">
-            <table className="min-w-full text-left text-sm">
+            <table className="min-w-full text-start text-sm">
               <thead className="bg-[var(--paper)]">
                 <tr>
-                  {["Order Number", "Name", "Contact", "Location", "Order", "Qty", "Time", "Payment", "Status"].map(
-                    (h) => (
-                      <th key={h} className="px-3 py-3">
-                        {h}
-                      </th>
-                    ),
-                  )}
+                  {[
+                    t("group.columns.number"),
+                    t("group.columns.name"),
+                    t("group.columns.contact"),
+                    t("group.columns.location"),
+                    t("group.columns.order"),
+                    t("group.columns.qty"),
+                    t("group.columns.time"),
+                    t("group.columns.payment"),
+                    t("group.columns.status"),
+                  ].map((h) => (
+                    <th key={h} className="px-3 py-3">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -215,8 +239,8 @@ function GroupOrders() {
                     <td className="px-3 py-3">{order.food_description}</td>
                     <td className="px-3 py-3">{order.quantity}</td>
                     <td className="px-3 py-3">{formatDateTime(order.pickup_time)}</td>
-                    <td className="px-3 py-3">{order.payment_status === "paid" ? "Paid" : "Not Paid"}</td>
-                    <td className="px-3 py-3">{order.status}</td>
+                    <td className="px-3 py-3">{order.payment_status === "paid" ? t("group.paid") : t("group.notPaid")}</td>
+                    <td className="px-3 py-3">{order.status === "completed" ? t("group.completed") : order.status}</td>
                   </tr>
                 ))}
               </tbody>

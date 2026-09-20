@@ -6,7 +6,6 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
-  updateDoc,
 } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/collections";
 import { getDb } from "@/lib/firebase";
@@ -96,21 +95,20 @@ export async function nextOrderNumber(
   return `${prefix}-${String(value).padStart(4, "0")}`;
 }
 
-export async function ensureUserProfile(input: {
+export async function createOwnProfile(input: {
   uid: string;
   email: string;
   name?: string;
+  role: UserRole;
 }): Promise<void> {
-  const ref = doc(getDb(), COLLECTIONS.users, input.uid);
-  await updateDoc(ref, { email: input.email }).catch(async () => {
-    await setDoc(ref, {
-      name: input.name ?? input.email.split("@")[0],
-      email: input.email,
-      role: "cashier",
-      inventory_access: true,
-      active: false,
-      created_at: Date.now(),
-      updated_at: Date.now(),
-    });
+  const now = Date.now();
+  await setDoc(doc(getDb(), COLLECTIONS.users, input.uid), {
+    name: input.name ?? (input.role === "owner" ? "Owner" : "Cashier"),
+    email: input.email,
+    role: input.role,
+    inventory_access: true,
+    active: true,
+    created_at: now,
+    updated_at: now,
   });
 }

@@ -1,4 +1,4 @@
-rules_version = '2';
+export const FIRESTORE_RULES_TEXT = `rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
@@ -134,3 +134,4 @@ service cloud.firestore {
     }
   }
 }
+`;

@@ -3,42 +3,47 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import { useI18n } from "@/i18n/I18nProvider";
 import { cn } from "@/utils/format";
 
 const ownerNav = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/pos", label: "Student POS" },
-  { href: "/group-orders", label: "Group Orders" },
-  { href: "/orders", label: "Orders" },
-  { href: "/menu", label: "Menu" },
-  { href: "/inventory", label: "Inventory" },
-  { href: "/buffet", label: "Buffet Tracking" },
-  { href: "/expenses", label: "Expenses" },
-  { href: "/reports", label: "Reports" },
-  { href: "/employees", label: "Employees" },
-  { href: "/activity", label: "Activity Logs" },
-  { href: "/settings", label: "Settings" },
+  { href: "/dashboard", key: "nav.dashboard" },
+  { href: "/pos", key: "nav.pos" },
+  { href: "/group-orders", key: "nav.groupOrders" },
+  { href: "/orders", key: "nav.orders" },
+  { href: "/menu", key: "nav.menu" },
+  { href: "/inventory", key: "nav.inventory" },
+  { href: "/buffet", key: "nav.buffet" },
+  { href: "/expenses", key: "nav.expenses" },
+  { href: "/reports", key: "nav.reports" },
+  { href: "/employees", key: "nav.employees" },
+  { href: "/activity", key: "nav.activity" },
+  { href: "/settings", key: "nav.settings" },
 ];
 
 const cashierNav = [
-  { href: "/pos", label: "Student POS" },
-  { href: "/group-orders", label: "Group Orders" },
-  { href: "/orders", label: "Today's Orders" },
-  { href: "/inventory", label: "Inventory" },
+  { href: "/pos", key: "nav.pos" },
+  { href: "/group-orders", key: "nav.groupOrders" },
+  { href: "/orders", key: "nav.todayOrders" },
+  { href: "/inventory", key: "nav.inventory" },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { profile, logout, online } = useAuth();
+  const { t } = useI18n();
   const pathname = usePathname();
-  const nav = profile?.role === "owner" ? ownerNav : cashierNav;
+  const nav =
+    profile?.role === "owner"
+      ? ownerNav
+      : cashierNav.filter((item) => item.href !== "/inventory" || profile?.inventory_access);
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[240px_1fr]">
-      <aside className="border-b border-[var(--line)] bg-[var(--panel)] md:border-b-0 md:border-r">
+      <aside className="border-b border-[var(--line)] bg-[var(--panel)] md:border-b-0 md:border-e">
         <div className="px-5 py-5">
           <p className="text-xs tracking-[0.25em] text-[var(--gold)]">KAK YAH MADINA</p>
           <h1 className="font-display text-2xl text-[var(--ink)]">Nasi Kandar</h1>
-          <p className="text-sm text-[var(--muted)]">Malaysian Food</p>
+          <p className="text-sm text-[var(--muted)]">{t("malaysianFood")}</p>
         </div>
         <nav className="flex gap-2 overflow-x-auto px-3 pb-3 md:flex-col md:overflow-visible">
           {nav.map((item) => (
@@ -52,7 +57,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   : "text-[var(--ink)] hover:bg-[var(--paper)]",
               )}
             >
-              {item.label}
+              {t(item.key)}
             </Link>
           ))}
         </nav>
@@ -63,10 +68,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               online ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800",
             )}
           >
-            {online ? "ONLINE" : "OFFLINE"}
+            {online ? t("online") : t("offline")}
           </span>
           <button type="button" onClick={() => void logout()} className="text-[var(--muted)]">
-            Logout
+            {t("logout")}
           </button>
         </div>
       </aside>

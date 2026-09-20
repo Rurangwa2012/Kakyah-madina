@@ -6,13 +6,15 @@ import type { UserRole } from "@/types";
 
 export function ProtectedPage({
   allow,
+  requireInventory = false,
   children,
 }: {
   allow: UserRole[];
+  requireInventory?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <RoleGate allow={allow}>
+    <RoleGate allow={allow} requireInventory={requireInventory}>
       <AppShell>{children}</AppShell>
     </RoleGate>
   );

@@ -8,6 +8,7 @@ import { listenStockMovements } from "@/services/inventory";
 import { listenRecentOrders } from "@/services/orders";
 import { formatSar } from "@/utils/money";
 import { rangeForFilter, toDateKey, type DateFilter } from "@/utils/date";
+import { useI18n } from "@/i18n/I18nProvider";
 import type { AuditLog, DailySummary, Expense, StockMovement, StudentOrder } from "@/types";
 
 export default function ReportsPage() {
@@ -19,6 +20,7 @@ export default function ReportsPage() {
 }
 
 function Reports() {
+  const { t } = useI18n();
   const [filter, setFilter] = useState<DateFilter>("month");
   const [customStart, setCustomStart] = useState(toDateKey());
   const [customEnd, setCustomEnd] = useState(toDateKey());
@@ -65,11 +67,11 @@ function Reports() {
 
   return (
     <div>
-      <PageHeader title="Reports" subtitle="Built from daily summaries so the dashboard stays fast." />
+      <PageHeader title={t("reports.title")} subtitle={t("reports.subtitle")} />
       <div className="mb-4 flex flex-wrap gap-2">
         {(["today", "yesterday", "week", "month", "custom"] as DateFilter[]).map((key) => (
           <Button key={key} variant={filter === key ? "primary" : "ghost"} onClick={() => setFilter(key)}>
-            {key}
+            {t(key)}
           </Button>
         ))}
         {filter === "custom" ? (
@@ -80,19 +82,19 @@ function Reports() {
         ) : null}
       </div>
       <div className="grid gap-3 md:grid-cols-3">
-        <Card>Daily / period sales: {formatSar(totals.total_sales_halalas)}</Card>
-        <Card>Student sales: {formatSar(totals.student_sales_halalas)}</Card>
-        <Card>Group sales: {formatSar(totals.group_sales_halalas)}</Card>
-        <Card>Cash: {formatSar(totals.cash_sales_halalas)}</Card>
-        <Card>Card: {formatSar(totals.card_sales_halalas)}</Card>
-        <Card>Mobile: {formatSar(totals.mobile_sales_halalas)}</Card>
-        <Card>Expenses: {formatSar(totals.expenses_halalas)}</Card>
-        <Card>Estimated profit: {formatSar(totals.total_sales_halalas - totals.expenses_halalas)}</Card>
-        <Card>Orders: {totals.order_count}</Card>
+        <Card>{t("reports.periodSales")}: {formatSar(totals.total_sales_halalas)}</Card>
+        <Card>{t("reports.studentSales")}: {formatSar(totals.student_sales_halalas)}</Card>
+        <Card>{t("reports.groupSales")}: {formatSar(totals.group_sales_halalas)}</Card>
+        <Card>{t("cash")}: {formatSar(totals.cash_sales_halalas)}</Card>
+        <Card>{t("card")}: {formatSar(totals.card_sales_halalas)}</Card>
+        <Card>{t("mobile")}: {formatSar(totals.mobile_sales_halalas)}</Card>
+        <Card>{t("reports.expenses")}: {formatSar(totals.expenses_halalas)}</Card>
+        <Card>{t("reports.profit")}: {formatSar(totals.total_sales_halalas - totals.expenses_halalas)}</Card>
+        <Card>{t("reports.orders")}: {totals.order_count}</Card>
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card>
-          <h3 className="font-display text-xl">Best selling items</h3>
+          <h3 className="font-display text-xl">{t("reports.best")}</h3>
           {best.map(([name, qty]) => (
             <p key={name}>
               {name}: {qty}
@@ -100,7 +102,7 @@ function Reports() {
           ))}
         </Card>
         <Card>
-          <h3 className="font-display text-xl">Stock movements</h3>
+          <h3 className="font-display text-xl">{t("reports.stock")}</h3>
           {movements.slice(0, 12).map((row) => (
             <p key={row.id} className="text-sm">
               {row.item_name} {row.type} {row.quantity}
@@ -108,7 +110,7 @@ function Reports() {
           ))}
         </Card>
         <Card>
-          <h3 className="font-display text-xl">Cashier activity</h3>
+          <h3 className="font-display text-xl">{t("reports.activity")}</h3>
           {logs.slice(0, 12).map((log) => (
             <p key={log.id} className="text-sm">
               {log.message}
@@ -116,8 +118,10 @@ function Reports() {
           ))}
         </Card>
         <Card>
-          <h3 className="font-display text-xl">Expense count</h3>
-          <p>{expenses.filter((row) => row.date_key >= startKey && row.date_key <= endKey).length} records in range</p>
+          <h3 className="font-display text-xl">{t("reports.expenseCount")}</h3>
+          <p>
+            {expenses.filter((row) => row.date_key >= startKey && row.date_key <= endKey).length} {t("reports.records")}
+          </p>
         </Card>
       </div>
     </div>

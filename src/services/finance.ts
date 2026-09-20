@@ -1,8 +1,6 @@
 import {
   addDoc,
   collection,
-  onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   where,
@@ -11,15 +9,15 @@ import {
 import { COLLECTIONS } from "@/lib/collections";
 import { getDb } from "@/lib/firebase";
 import { bumpDailySummary, writeAuditLog } from "@/lib/firestore";
+import { listenDocs } from "@/lib/listen";
 import { toDateKey } from "@/utils/date";
 import type { AppUser, AuditLog, DailySummary, Expense } from "@/types";
 
 export function listenExpenses(cb: (rows: Expense[]) => void): Unsubscribe {
-  return onSnapshot(
-    query(collection(getDb(), COLLECTIONS.expenses), orderBy("created_at", "desc")),
-    (snap) => {
-      cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Expense, "id">) })));
-    },
+  return listenDocs(
+    collection(getDb(), COLLECTIONS.expenses),
+    (id, data) => ({ id, ...(data as Omit<Expense, "id">) }),
+    (rows) => cb([...rows].sort((a, b) => b.created_at - a.created_at)),
   );
 }
 
@@ -47,15 +45,10 @@ export async function createExpense(
 }
 
 export function listenAuditLogs(cb: (rows: AuditLog[]) => void): Unsubscribe {
-  return onSnapshot(
-    query(collection(getDb(), COLLECTIONS.auditLogs), orderBy("created_at", "desc")),
-    (snap) => {
-      cb(
-        snap.docs
-          .slice(0, 200)
-          .map((d) => ({ id: d.id, ...(d.data() as Omit<AuditLog, "id">) })),
-      );
-    },
+  return listenDocs(
+    collection(getDb(), COLLECTIONS.auditLogs),
+    (id, data) => ({ id, ...(data as Omit<AuditLog, "id">) }),
+    (rows) => cb([...rows].sort((a, b) => b.created_at - a.created_at).slice(0, 200)),
   );
 }
 
@@ -64,15 +57,15 @@ export function listenDailySummaries(
   endDate: string,
   cb: (rows: DailySummary[]) => void,
 ): Unsubscribe {
-  const q = query(
-    collection(getDb(), COLLECTIONS.dailySummaries),
-    where("date", ">=", startDate),
-    where("date", "<=", endDate),
-    orderBy("date", "asc"),
+  return listenDocs(
+    query(
+      collection(getDb(), COLLECTIONS.dailySummaries),
+      where("date", ">=", startDate),
+      where("date", "<=", endDate),
+    ),
+    (id, data) => ({ id, ...(data as Omit<DailySummary, "id">) }),
+    (rows) => cb([...rows].sort((a, b) => a.date.localeCompare(b.date))),
   );
-  return onSnapshot(q, (snap) => {
-    cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<DailySummary, "id">) })));
-  });
 }
 
 export function emptySummary(date = toDateKey()): DailySummary {

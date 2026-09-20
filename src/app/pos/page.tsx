@@ -10,7 +10,8 @@ import { printerService, studentReceiptHtml } from "@/services/printer";
 import { getSettings } from "@/services/catalog";
 import { MENU_CATEGORIES, type MenuItem, type OrderLine, type PaymentMethod } from "@/types";
 import { applyDiscount, formatSar, lineTotal, orderSubtotal } from "@/utils/money";
-import { cn } from "@/utils/format";
+import { cn, isExtraItem } from "@/utils/format";
+import { useI18n } from "@/i18n/I18nProvider";
 
 export default function PosPage() {
   return (
@@ -23,6 +24,7 @@ export default function PosPage() {
 function StudentPos() {
   const { items } = useMenu();
   const { profile } = useAuth();
+  const { t } = useI18n();
   const [category, setCategory] = useState<string>("All");
   const [lines, setLines] = useState<OrderLine[]>([]);
   const [discount, setDiscount] = useState(0);
@@ -30,9 +32,12 @@ function StudentPos() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
+  const extraItems = useMemo(() => items.filter(isExtraItem), [items]);
+
   const visible = useMemo(() => {
+    if (category === "Extra") return extraItems;
     return items.filter((item) => category === "All" || item.category === category);
-  }, [items, category]);
+  }, [items, category, extraItems]);
 
   const subtotal = orderSubtotal(lines);
   const total = applyDiscount(subtotal, discount);
@@ -101,24 +106,36 @@ function StudentPos() {
   return (
     <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
       <div>
-        <PageHeader title="Student POS" subtitle="Select what the student took from the buffet" />
+        <PageHeader title={t("pos.title")} subtitle={t("pos.subtitle")} />
         <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-          {["All", ...MENU_CATEGORIES].map((cat) => (
+          <button
+            type="button"
+            onClick={() => setCategory("Extra")}
+            className={cn(
+              "min-h-14 shrink-0 rounded-2xl px-6 text-lg font-extrabold",
+              category === "Extra" ? "bg-[var(--gold)] text-[var(--ink)]" : "bg-[var(--spice)] text-white",
+            )}
+          >
+            {t("extra")}
+          </button>
+          {["All", ...MENU_CATEGORIES.filter((cat) => cat !== "Extras")].map((cat) => (
             <button
               key={cat}
               type="button"
               onClick={() => setCategory(cat)}
               className={cn(
-                "min-h-11 shrink-0 rounded-full px-4 font-semibold",
+                "min-h-14 shrink-0 rounded-2xl px-4 font-semibold",
                 category === cat ? "bg-[var(--ink)] text-white" : "bg-white text-[var(--ink)]",
               )}
             >
-              {cat}
+              {cat === "All" ? t("all") : t(`cats.${cat}`)}
             </button>
           ))}
         </div>
-        {visible.length === 0 ? (
-          <EmptyState title="No menu items" body="Owner can add buffet items on the Menu page." />
+        {category === "Extra" && extraItems.length === 0 ? (
+          <EmptyState title={t("pos.noExtras")} body={t("pos.noExtrasBody")} />
+        ) : visible.length === 0 ? (
+          <EmptyState title={t("pos.noItems")} body={t("pos.noItemsBody")} />
         ) : (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
             {visible.map((item) => {
@@ -130,7 +147,7 @@ function StudentPos() {
                   disabled={disabled}
                   onClick={() => addItem(item)}
                   className={cn(
-                    "min-h-36 rounded-2xl border border-[var(--line)] bg-white p-3 text-left shadow-sm",
+                    "min-h-36 rounded-2xl border border-[var(--line)] bg-white p-3 text-start shadow-sm",
                     disabled && "opacity-50",
                   )}
                 >
@@ -145,7 +162,7 @@ function StudentPos() {
                   <p className="font-bold">{item.name}</p>
                   <p className="text-[var(--spice)]">{formatSar(item.price_halalas)}</p>
                   <p className="text-xs text-[var(--muted)]">
-                    {item.sold_out ? "Sold out" : item.available ? "Available" : "Unavailable"}
+                    {item.sold_out ? t("pos.soldOut") : item.available ? t("pos.available") : t("pos.unavailable")}
                   </p>
                 </button>
               );
@@ -154,10 +171,10 @@ function StudentPos() {
         )}
       </div>
       <Card className="h-fit xl:sticky xl:top-4">
-        <h3 className="font-display text-2xl">Current order</h3>
+        <h3 className="font-display text-2xl">{t("pos.current")}</h3>
         <div className="mt-3 space-y-2">
           {lines.length === 0 ? (
-            <p className="text-sm text-[var(--muted)]">Tap food cards to add items.</p>
+            <p className="text-sm text-[var(--muted)]">{t("pos.tap")}</p>
           ) : (
             lines.map((line) => (
               <div key={line.menu_id} className="rounded-xl bg-[var(--paper)] p-3">
@@ -182,7 +199,7 @@ function StudentPos() {
                     className="min-h-11 px-4"
                     onClick={() => setLines((current) => current.filter((row) => row.menu_id !== line.menu_id))}
                   >
-                    Remove
+                    {t("remove")}
                   </Button>
                 </div>
               </div>
@@ -190,7 +207,7 @@ function StudentPos() {
           )}
         </div>
         <label className="mt-4" htmlFor="discount">
-          Discount (halalas)
+          {t("pos.discountHalalas")}
         </label>
         <input
           id="discount"
@@ -201,15 +218,15 @@ function StudentPos() {
         />
         <div className="mt-4 space-y-1 text-lg">
           <div className="flex justify-between">
-            <span>Subtotal</span>
+            <span>{t("subtotal")}</span>
             <span>{formatSar(subtotal)}</span>
           </div>
           <div className="flex justify-between">
-            <span>Discount</span>
+            <span>{t("discount")}</span>
             <span>{formatSar(discount)}</span>
           </div>
           <div className="flex justify-between font-bold">
-            <span>Total</span>
+            <span>{t("total")}</span>
             <span>{formatSar(total)}</span>
           </div>
         </div>
@@ -220,12 +237,12 @@ function StudentPos() {
               variant={payment === method ? "secondary" : "ghost"}
               onClick={() => setPayment(method)}
             >
-              {method.toUpperCase()}
+              {t(method)}
             </Button>
           ))}
         </div>
         <Button className="mt-4 w-full" variant="pay" disabled={busy || lines.length === 0} onClick={() => void payAndPrint()}>
-          PAY & PRINT
+          {t("payPrint")}
         </Button>
         {message ? <p className="mt-3 text-sm">{message}</p> : null}
       </Card>

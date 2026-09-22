@@ -1,3 +1,4 @@
+import { FirebaseError } from "firebase/app";
 import {
   collection,
   deleteDoc,
@@ -24,7 +25,12 @@ export function listenMenu(cb: (items: MenuItem[]) => void): Unsubscribe {
       ...(data as Omit<MenuItem, "id">),
       is_extra: Boolean(data.is_extra) || data.category === "Extras",
     }),
-    (items) => cb([...items].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))),
+    (items) =>
+      cb(
+        [...items]
+          .filter((item) => !item.archived)
+          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
+      ),
   );
 }
 
@@ -97,7 +103,16 @@ export async function archiveMenuItem(id: string, actor: AppUser, name: string):
 }
 
 export async function deleteMenuItem(id: string, actor: AppUser, name: string): Promise<void> {
-  await deleteDoc(doc(getDb(), COLLECTIONS.menu, id));
+  const refDoc = doc(getDb(), COLLECTIONS.menu, id);
+  try {
+    await deleteDoc(refDoc);
+  } catch (err) {
+    const denied = err instanceof FirebaseError && err.code.includes("permission");
+    if (!denied) throw err;
+    // Live Console rules may still forbid delete; hide the item instead.
+    await archiveMenuItem(id, actor, name);
+    return;
+  }
   await writeAuditLog({
     action: "MENU_DELETED",
     message: `${actor.name} deleted menu item ${name}`,

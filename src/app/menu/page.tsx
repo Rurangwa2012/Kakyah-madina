@@ -113,9 +113,10 @@ function MenuManager() {
     if (!profile) return;
     if (!window.confirm(t("menu.confirmDelete", { name: item.name }))) return;
     setError("");
+    setItems((current) => current.filter((row) => row.id !== item.id));
+    if (form.id === item.id) resetForm();
     try {
       await deleteMenuItem(item.id, profile, item.name);
-      if (form.id === item.id) resetForm();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not delete item. Publish updated firestore.rules.");
     }

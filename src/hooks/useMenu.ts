@@ -10,7 +10,7 @@ export function useMenu() {
   useEffect(() => {
     try {
       return listenMenu((next) => {
-        setItems(next.filter((item) => !item.archived));
+        setItems(next);
         setLoading(false);
       });
     } catch {

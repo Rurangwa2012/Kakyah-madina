@@ -1,19 +1,10 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    function ownerUser() {
-      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
-    }
-
-    function isOwner() {
-      return request.auth != null
-        && (ownerUser().role == 'owner' || ownerUser().role == 'Owner')
-        && (ownerUser().active == true || ownerUser().active == 'true');
-    }
-
     match /menu/{itemId}/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if isOwner()
+      // Photos are shown in <img> tags, which do not send Firebase Auth.
+      allow read: if true;
+      allow write: if request.auth != null
         && request.resource.size < 8 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }

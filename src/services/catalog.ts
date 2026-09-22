@@ -123,10 +123,23 @@ export async function deleteMenuItem(id: string, actor: AppUser, name: string): 
 }
 
 export async function uploadMenuImage(file: File, itemId: string): Promise<string> {
-  const safeName = file.name.replace(/[^a-zA-Z0-9.\-]/g, "_");
+  const safeName = file.name.replace(/[^a-zA-Z0-9.\-]/g, "_") || "photo.jpg";
+  const contentType = file.type.startsWith("image/") ? file.type : "image/jpeg";
   const storageRef = ref(getFirebaseStorage(), `menu/${itemId}/${Date.now()}-${safeName}`);
-  await uploadBytes(storageRef, file, { contentType: file.type || "image/jpeg" });
-  return getDownloadURL(storageRef);
+  try {
+    await uploadBytes(storageRef, file, { contentType });
+    return getDownloadURL(storageRef);
+  } catch (err) {
+    if (err instanceof FirebaseError && err.code.includes("permission")) {
+      throw new Error(
+        "Photo upload was blocked. In Firebase Console open Storage → Rules, paste storage.rules from this project, then Publish.",
+      );
+    }
+    if (err instanceof FirebaseError && err.code.includes("unauthorized")) {
+      throw new Error("Sign in again, then save the photo.");
+    }
+    throw err instanceof Error ? err : new Error("Could not upload photo.");
+  }
 }
 
 export async function getSettings(): Promise<RestaurantSettings> {

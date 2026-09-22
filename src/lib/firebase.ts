@@ -9,17 +9,6 @@ import {
 } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
-import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
-import {
-  getFirestore,
-  initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
-  type Firestore,
-} from "firebase/firestore";
-import { getStorage, type FirebaseStorage } from "firebase/storage";
-
 /** Public Firebase web app config (safe in the browser). Env vars override when present. */
 const FALLBACK_WEB_CONFIG = {
   apiKey: "AIzaSyD-tIo4Ss-ToNqpt8CUF9NpJ5WpmBOgy7M",

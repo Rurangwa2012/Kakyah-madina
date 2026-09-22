@@ -73,7 +73,7 @@ function Dashboard() {
   }, [orders, range]);
   const wasteRows = buffet.filter((row) => row.date_key >= startKey && row.date_key <= endKey).slice(0, 8);
 
-  const maxSales = Math.max(totals.cash_sales_halalas, totals.card_sales_halalas, totals.mobile_sales_halalas, 1);
+  const maxSales = Math.max(totals.cash_sales_halalas, totals.card_sales_halalas, 1);
 
   return (
     <div>
@@ -98,7 +98,6 @@ function Dashboard() {
         <Stat label={t("dashboard.groupOrders")} value={String(totals.group_order_count)} />
         <Stat label={t("dashboard.cashSales")} value={formatSar(totals.cash_sales_halalas)} />
         <Stat label={t("dashboard.cardSales")} value={formatSar(totals.card_sales_halalas)} />
-        <Stat label={t("dashboard.mobileSales")} value={formatSar(totals.mobile_sales_halalas)} />
         <Stat label={t("dashboard.expenses")} value={formatSar(totals.expenses_halalas)} />
         <Stat label={t("dashboard.profit")} value={formatSar(profit)} />
       </div>
@@ -106,7 +105,6 @@ function Dashboard() {
         <h3 className="font-display text-xl">{t("dashboard.mix")}</h3>
         <Bar label={t("cash")} value={totals.cash_sales_halalas} max={maxSales} />
         <Bar label={t("card")} value={totals.card_sales_halalas} max={maxSales} />
-        <Bar label={t("mobile")} value={totals.mobile_sales_halalas} max={maxSales} />
       </Card>
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card>

@@ -17,6 +17,10 @@ export function isExtraItem(item: Pick<MenuItem, "category"> & { is_extra?: bool
   return item.is_extra === true || item.category === "Extras";
 }
 
+export function linesSummary(lines: Array<{ name: string; quantity: number }>): string {
+  return lines.map((line) => `${line.name} × ${line.quantity}`).join(", ");
+}
+
 export function cn(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(" ");
 }

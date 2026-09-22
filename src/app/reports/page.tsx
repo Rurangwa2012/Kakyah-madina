@@ -87,7 +87,6 @@ function Reports() {
         <Card>{t("reports.groupSales")}: {formatSar(totals.group_sales_halalas)}</Card>
         <Card>{t("cash")}: {formatSar(totals.cash_sales_halalas)}</Card>
         <Card>{t("card")}: {formatSar(totals.card_sales_halalas)}</Card>
-        <Card>{t("mobile")}: {formatSar(totals.mobile_sales_halalas)}</Card>
         <Card>{t("reports.expenses")}: {formatSar(totals.expenses_halalas)}</Card>
         <Card>{t("reports.profit")}: {formatSar(totals.total_sales_halalas - totals.expenses_halalas)}</Card>
         <Card>{t("reports.orders")}: {totals.order_count}</Card>

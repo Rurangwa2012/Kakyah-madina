@@ -1,38 +1,12 @@
-import { initializeApp } from "firebase/app";
-import {
-  collection,
-  doc,
-  getDocs,
-  initializeFirestore,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
+import { createClient } from "@supabase/supabase-js";
 
-const required = [
-  "NEXT_PUBLIC_FIREBASE_API_KEY",
-  "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
-  "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
-  "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",
-  "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
-  "NEXT_PUBLIC_FIREBASE_APP_ID",
-] as const;
-
-for (const key of required) {
-  if (!process.env[key]) {
-    throw new Error(`Missing ${key}. Run: node --env-file=.env.local --import tsx scripts/seed.ts`);
-  }
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://dspwrfcjdcowuymjazze.supabase.co";
+const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+if (!key) {
+  throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY (preferred) or NEXT_PUBLIC_SUPABASE_ANON_KEY");
 }
 
-const app = initializeApp({
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-});
-
-const db = initializeFirestore(app, {});
+const supabase = createClient(url, key, { auth: { persistSession: false } });
 
 const menu = [
   { name: "Nasi Kandar", category: "Rice", price_halalas: 1500, sort_order: 1 },
@@ -62,53 +36,36 @@ const inventory = [
 ];
 
 async function seed() {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("Refusing to seed in production.");
-  }
-  const existing = await getDocs(collection(db, "menu"));
-  if (!existing.empty) {
-    console.log("Menu already has documents. Seed skipped to avoid duplicates.");
+  const { count, error: countError } = await supabase.from("menu").select("*", { count: "exact", head: true });
+  if (countError) throw countError;
+  if ((count ?? 0) > 0) {
+    console.log("Menu already has rows. Seed skipped.");
     return;
   }
   const now = Date.now();
-  for (const item of menu) {
-    const id = item.name.toLowerCase().replace(/\s+/g, "-");
-    await setDoc(doc(db, "menu", id), {
+  const { error: menuError } = await supabase.from("menu").insert(
+    menu.map((item) => ({
       ...item,
       image_url: "",
       available: true,
       sold_out: false,
       archived: false,
+      is_extra: false,
       created_at: now,
       updated_at: now,
-    });
-  }
-  for (const item of inventory) {
-    const id = item.name.toLowerCase().replace(/\s+/g, "-");
-    const status = item.quantity <= 0 ? "out" : item.quantity <= item.min_stock ? "low" : "good";
-    await setDoc(doc(db, "inventory", id), {
+    })),
+  );
+  if (menuError) throw menuError;
+  const { error: invError } = await supabase.from("inventory").insert(
+    inventory.map((item) => ({
       ...item,
-      status,
+      status: item.quantity <= item.min_stock ? "low" : "good",
       cost_halalas: 0,
       last_updated: now,
       created_at: now,
-    });
-  }
-  await setDoc(doc(db, "settings", "restaurant"), {
-    restaurant_name: "Kak Yah Madina",
-    currency: "SAR",
-    receipt_footer: "Thank You",
-    student_order_prefix: "S",
-    group_order_prefix: "U",
-    payment_methods: ["cash", "card", "mobile"],
-    low_stock_alert: true,
-    printer: { type: "browser", paper_width_mm: 80 },
-    owner_approval_required: false,
-    updated_at: now,
-    server_updated_at: serverTimestamp(),
-  });
-  await setDoc(doc(db, "counters", "student_orders"), { value: 0, prefix: "S", updated_at: now });
-  await setDoc(doc(db, "counters", "group_orders"), { value: 0, prefix: "U", updated_at: now });
+    })),
+  );
+  if (invError) throw invError;
   console.log("Development seed complete.");
 }
 

@@ -1,4 +1,4 @@
-import type { StudentOrder, RestaurantSettings } from "@/types";
+import type { OrderLine, StudentOrder, RestaurantSettings } from "@/types";
 import { formatSar } from "@/utils/money";
 import { formatDate, formatTime } from "@/utils/date";
 
@@ -103,20 +103,35 @@ export function groupReceiptHtml(input: {
   contact_number: string;
   location: string;
   food_description: string;
+  lines?: OrderLine[];
   quantity: number;
+  total_halalas?: number;
   pickup_time: number;
   payment_status: string;
   settings: RestaurantSettings;
 }): string {
+  const itemRows =
+    input.lines && input.lines.length > 0
+      ? input.lines
+          .map(
+            (line) =>
+              `<tr><td>${line.name} x${line.quantity}</td><td class="right">${formatSar(line.total_halalas)}</td></tr>`,
+          )
+          .join("")
+      : `<tr><td>${input.food_description}</td><td class="right">x${input.quantity}</td></tr>`;
   return `<!doctype html>
 <html>
 <head>
   <title>${input.order_number}</title>
   <style>
     @page { size: 80mm auto; margin: 4mm; }
-    body { font-family: ui-monospace, Consolas, monospace; width: 72mm; text-align: center; }
-    p { margin: 4px 0; }
+    body { font-family: ui-monospace, Consolas, monospace; width: 72mm; color: #111; }
+    p, h1 { margin: 4px 0; text-align: center; }
     h1 { font-size: 16px; }
+    table { width: 100%; font-size: 12px; border-collapse: collapse; }
+    td.right { text-align: right; }
+    .line { border-top: 1px dashed #333; margin: 8px 0; }
+    .total { font-weight: bold; }
   </style>
 </head>
 <body>
@@ -126,8 +141,12 @@ export function groupReceiptHtml(input: {
   <p>${input.group_name}</p>
   <p>Contact: ${input.contact_number}</p>
   <p>Location: ${input.location}</p>
-  <p>Order: ${input.food_description}</p>
-  <p>Quantity: ${input.quantity}</p>
+  <div class="line"></div>
+  <table>${itemRows}</table>
+  <div class="line"></div>
+  <table>
+    <tr class="total"><td>TOTAL</td><td class="right">${formatSar(input.total_halalas ?? 0)}</td></tr>
+  </table>
   <p>Time: ${formatTime(input.pickup_time)}</p>
   <p>Payment: ${input.payment_status === "paid" ? "Paid" : "Not Paid"}</p>
   <p>${input.settings.receipt_footer}</p>

@@ -1,16 +1,31 @@
-import { onSnapshot, type Query, type Unsubscribe } from "firebase/firestore";
+import { getSupabase } from "@/lib/supabase";
 
-export function listenDocs<T>(
-  q: Query,
-  map: (id: string, data: Record<string, unknown>) => T,
+export type Unsubscribe = () => void;
+
+export function listenQuery<T>(
+  table: string,
+  loader: () => Promise<T[]>,
   cb: (rows: T[]) => void,
 ): Unsubscribe {
-  return onSnapshot(
-    q,
-    (snap) => cb(snap.docs.map((d) => map(d.id, d.data() as Record<string, unknown>))),
-    (err) => {
-      console.error("Firestore listener failed", err);
-      cb([]);
-    },
-  );
+  let cancelled = false;
+  const run = async () => {
+    try {
+      const rows = await loader();
+      if (!cancelled) cb(rows);
+    } catch (err) {
+      console.error("Supabase listener failed", err);
+      if (!cancelled) cb([]);
+    }
+  };
+  void run();
+  const channel = getSupabase()
+    .channel(`kak-yah-${table}-${crypto.randomUUID()}`)
+    .on("postgres_changes", { event: "*", schema: "public", table }, () => {
+      void run();
+    })
+    .subscribe();
+  return () => {
+    cancelled = true;
+    void getSupabase().removeChannel(channel);
+  };
 }

@@ -1,12 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { collection, doc } from "firebase/firestore";
 import { ProtectedPage } from "@/components/ProtectedPage";
 import { Button, Card, PageHeader } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
-import { COLLECTIONS } from "@/lib/collections";
-import { getDb } from "@/lib/firebase";
 import {
   deleteMenuItem,
   listenMenu,
@@ -80,7 +77,7 @@ function MenuManager() {
     setBusy(true);
     setError("");
     try {
-      const id = form.id || doc(collection(getDb(), COLLECTIONS.menu)).id;
+      const id = form.id || crypto.randomUUID();
       const category = form.customCategory.trim() || form.category;
       let image_url = form.image_url;
       if (file) {

@@ -1,15 +1,5 @@
-import {
-  addDoc,
-  collection,
-  doc,
-  increment,
-  runTransaction,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/collections";
-import { getDb } from "@/lib/firebase";
 import { toDateKey } from "@/utils/date";
+import { getSupabase, throwIfError } from "@/lib/supabase";
 import type { AuditAction, PaymentMethod, UserRole } from "@/types";
 
 export async function writeAuditLog(input: {
@@ -20,11 +10,11 @@ export async function writeAuditLog(input: {
   actor_role: UserRole;
   meta?: Record<string, string | number | boolean>;
 }): Promise<void> {
-  await addDoc(collection(getDb(), COLLECTIONS.auditLogs), {
+  const { error } = await getSupabase().from("audit_logs").insert({
     ...input,
     created_at: Date.now(),
-    server_created_at: serverTimestamp(),
   });
+  throwIfError(error);
 }
 
 export async function bumpDailySummary(input: {
@@ -41,25 +31,20 @@ export async function bumpDailySummary(input: {
   expenses?: number;
 }): Promise<void> {
   const date = input.dateKey ?? toDateKey();
-  const ref = doc(getDb(), COLLECTIONS.dailySummaries, date);
-  await setDoc(
-    ref,
-    {
-      date,
-      total_sales_halalas: increment(input.totalSales ?? 0),
-      student_sales_halalas: increment(input.studentSales ?? 0),
-      group_sales_halalas: increment(input.groupSales ?? 0),
-      cash_sales_halalas: increment(input.cashSales ?? 0),
-      card_sales_halalas: increment(input.cardSales ?? 0),
-      mobile_sales_halalas: increment(input.mobileSales ?? 0),
-      order_count: increment(input.orderCount ?? 0),
-      student_order_count: increment(input.studentOrderCount ?? 0),
-      group_order_count: increment(input.groupOrderCount ?? 0),
-      expenses_halalas: increment(input.expenses ?? 0),
-      updated_at: Date.now(),
-    },
-    { merge: true },
-  );
+  const { error } = await getSupabase().rpc("bump_daily_summary", {
+    p_date: date,
+    p_total_sales: input.totalSales ?? 0,
+    p_student_sales: input.studentSales ?? 0,
+    p_group_sales: input.groupSales ?? 0,
+    p_cash: input.cashSales ?? 0,
+    p_card: input.cardSales ?? 0,
+    p_mobile: input.mobileSales ?? 0,
+    p_order_count: input.orderCount ?? 0,
+    p_student_orders: input.studentOrderCount ?? 0,
+    p_group_orders: input.groupOrderCount ?? 0,
+    p_expenses: input.expenses ?? 0,
+  });
+  throwIfError(error);
 }
 
 export function paymentIncrement(
@@ -71,28 +56,13 @@ export function paymentIncrement(
   return { mobileSales: amount };
 }
 
-export async function nextOrderNumber(
-  counterId: string,
-  prefix: string,
-): Promise<string> {
-  const db = getDb();
-  const counterRef = doc(db, COLLECTIONS.counters, counterId);
-  const value = await runTransaction(db, async (tx) => {
-    const snap = await tx.get(counterRef);
-    const current = snap.exists() ? Number(snap.data().value ?? 0) : 0;
-    const next = current + 1;
-    tx.set(
-      counterRef,
-      {
-        value: next,
-        prefix,
-        updated_at: Date.now(),
-      },
-      { merge: true },
-    );
-    return next;
+export async function nextOrderNumber(counterId: string, prefix: string): Promise<string> {
+  const { data, error } = await getSupabase().rpc("next_order_number", {
+    p_id: counterId,
+    p_prefix: prefix,
   });
-  return `${prefix}-${String(value).padStart(4, "0")}`;
+  throwIfError(error);
+  return String(data);
 }
 
 export async function createOwnProfile(input: {
@@ -102,7 +72,8 @@ export async function createOwnProfile(input: {
   role: UserRole;
 }): Promise<void> {
   const now = Date.now();
-  await setDoc(doc(getDb(), COLLECTIONS.users, input.uid), {
+  const { error } = await getSupabase().from("profiles").upsert({
+    id: input.uid,
     name: input.name ?? (input.role === "owner" ? "Owner" : "Cashier"),
     email: input.email,
     role: input.role,
@@ -111,4 +82,5 @@ export async function createOwnProfile(input: {
     created_at: now,
     updated_at: now,
   });
+  throwIfError(error);
 }

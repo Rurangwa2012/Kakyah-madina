@@ -1,21 +1,18 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signOut,
-  type User,
-} from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
-import { getFirebaseAuth, getDb, isFirebaseConfigured } from "@/lib/firebase";
-import { COLLECTIONS } from "@/lib/collections";
 import { writeAuditLog } from "@/lib/firestore";
+import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { profileFromDoc } from "@/lib/userProfile";
 import type { AppUser } from "@/types";
 
+export interface AuthUser {
+  uid: string;
+  email: string | null;
+}
+
 interface AuthState {
-  firebaseUser: User | null;
+  firebaseUser: AuthUser | null;
   profile: AppUser | null;
   loading: boolean;
   configured: boolean;
@@ -23,18 +20,19 @@ interface AuthState {
   profileError: string;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState(true);
   const [profileError, setProfileError] = useState("");
   const [mounted, setMounted] = useState(false);
-  const configured = mounted ? isFirebaseConfigured() : true;
+  const configured = mounted ? isSupabaseConfigured() : true;
 
   useEffect(() => {
     setMounted(true);
@@ -48,48 +46,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  async function loadProfile(uid: string) {
+    const { data, error } = await getSupabase().from("profiles").select("*").eq("id", uid).maybeSingle();
+    if (error) {
+      setProfileError(error.message);
+      setProfile(null);
+    } else if (data) {
+      setProfile(profileFromDoc(String(data.id), data as Record<string, unknown>));
+      setProfileError("");
+    } else {
+      setProfile(null);
+      setProfileError("");
+    }
+    setLoading(false);
+  }
+
   useEffect(() => {
     if (!mounted) return;
-    if (!isFirebaseConfigured()) {
+    if (!isSupabaseConfigured()) {
       setLoading(false);
       return;
     }
-    const auth = getFirebaseAuth();
-    let unsubProfile: (() => void) | undefined;
-    const unsub = onAuthStateChanged(auth, (user) => {
-      unsubProfile?.();
-      setFirebaseUser(user);
-      setProfileError("");
+    const supabase = getSupabase();
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user;
       if (!user) {
+        setFirebaseUser(null);
         setProfile(null);
         setLoading(false);
         return;
       }
-      try {
-        unsubProfile = onSnapshot(
-          doc(getDb(), COLLECTIONS.users, user.uid),
-          (snap) => {
-            if (snap.exists()) {
-              setProfile(profileFromDoc(snap.id, snap.data() as Record<string, unknown>));
-            } else {
-              setProfile(null);
-            }
-            setLoading(false);
-          },
-          (err) => {
-            setProfileError(err.message);
-            setProfile(null);
-            setLoading(false);
-          },
-        );
-      } catch (err) {
-        setProfileError(err instanceof Error ? err.message : "Could not load profile");
+      setFirebaseUser({ uid: user.id, email: user.email ?? null });
+      void loadProfile(user.id);
+    });
+    void supabase.auth.getSession().then(({ data }) => {
+      const user = data.session?.user;
+      if (!user) {
         setLoading(false);
+        return;
       }
+      setFirebaseUser({ uid: user.id, email: user.email ?? null });
+      void loadProfile(user.id);
     });
     return () => {
-      unsub();
-      unsubProfile?.();
+      sub.subscription.unsubscribe();
     };
   }, [mounted]);
 
@@ -101,18 +101,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       configured,
       online,
       profileError,
+      refreshProfile: async () => {
+        const { data } = await getSupabase().auth.getUser();
+        if (data.user) await loadProfile(data.user.id);
+      },
       login: async (email, password) => {
-        const cred = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
+        const { data, error } = await getSupabase().auth.signInWithPassword({ email, password });
+        if (error) throw error;
         try {
           await writeAuditLog({
             action: "LOGIN",
             message: `${email} signed in`,
-            actor_id: cred.user.uid,
+            actor_id: data.user.id,
             actor_name: email,
             actor_role: "cashier",
           });
         } catch {
-          // Audit write may fail until user doc/rules exist.
+          // profile may not exist yet
         }
       },
       logout: async () => {
@@ -129,7 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // ignore
           }
         }
-        await signOut(getFirebaseAuth());
+        await getSupabase().auth.signOut();
       },
     }),
     [firebaseUser, profile, loading, configured, online, profileError],

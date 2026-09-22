@@ -6,7 +6,8 @@ import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { cancelStudentOrder, listenRecentOrders, listenTodayOrders } from "@/services/orders";
 import { getSettings } from "@/services/catalog";
-import { printerService, studentReceiptHtml } from "@/services/printer";
+import { studentReceiptHtml } from "@/services/printer";
+import { issueReceipt } from "@/services/receipts";
 import { writeAuditLog } from "@/lib/firestore";
 import { formatDateTime } from "@/utils/date";
 import { formatSar } from "@/utils/money";
@@ -37,7 +38,7 @@ function OrdersView() {
     setBusyId(order.id);
     try {
       const settings = await getSettings();
-      await printerService.printHtml(studentReceiptHtml(order, settings));
+      await issueReceipt(studentReceiptHtml(order, settings), order.order_number, { print: true, kind: "student" });
       await writeAuditLog({
         action: "RECEIPT_REPRINTED",
         message: `${profile.name} reprinted ${order.order_number}`,
@@ -45,6 +46,16 @@ function OrdersView() {
         actor_name: profile.name,
         actor_role: profile.role,
       });
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function saveReceipt(order: StudentOrder) {
+    setBusyId(order.id);
+    try {
+      const settings = await getSettings();
+      await issueReceipt(studentReceiptHtml(order, settings), order.order_number, { print: false, kind: "student" });
     } finally {
       setBusyId("");
     }
@@ -112,6 +123,14 @@ function OrdersView() {
                         onClick={() => void reprint(order)}
                       >
                         {t("reprint")}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="min-h-10 text-sm"
+                        disabled={busyId === order.id}
+                        onClick={() => void saveReceipt(order)}
+                      >
+                        {t("saveReceipt")}
                       </Button>
                       {isOwner && order.status === "completed" ? (
                         <>

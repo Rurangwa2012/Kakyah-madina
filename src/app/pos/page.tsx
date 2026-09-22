@@ -1,16 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ProtectedPage } from "@/components/ProtectedPage";
-import { Button, Card, EmptyState, PageHeader } from "@/components/ui";
+import { Button, Card, PageHeader } from "@/components/ui";
+import { MenuPicker } from "@/components/MenuPicker";
 import { useAuth } from "@/hooks/useAuth";
 import { useMenu } from "@/hooks/useMenu";
 import { createStudentOrder } from "@/services/orders";
-import { printerService, studentReceiptHtml } from "@/services/printer";
+import { studentReceiptHtml } from "@/services/printer";
+import { issueReceipt } from "@/services/receipts";
 import { getSettings } from "@/services/catalog";
-import { MENU_CATEGORIES, type MenuItem, type OrderLine, type PaymentMethod } from "@/types";
-import { applyDiscount, formatSar, lineTotal, orderSubtotal } from "@/utils/money";
-import { cn, isExtraItem } from "@/utils/format";
+import type { MenuItem, OrderLine, PaymentMethod } from "@/types";
+import { applyDiscount, formatSar, lineTotal, orderSubtotal, payableTotal } from "@/utils/money";
 import { useI18n } from "@/i18n/I18nProvider";
 
 export default function PosPage() {
@@ -25,22 +26,15 @@ function StudentPos() {
   const { items } = useMenu();
   const { profile } = useAuth();
   const { t } = useI18n();
-  const [category, setCategory] = useState<string>("All");
   const [lines, setLines] = useState<OrderLine[]>([]);
   const [discount, setDiscount] = useState(0);
   const [payment, setPayment] = useState<PaymentMethod>("cash");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
-  const extraItems = useMemo(() => items.filter(isExtraItem), [items]);
-
-  const visible = useMemo(() => {
-    if (category === "Extra") return extraItems;
-    return items.filter((item) => category === "All" || item.category === category);
-  }, [items, category, extraItems]);
-
   const subtotal = orderSubtotal(lines);
-  const total = applyDiscount(subtotal, discount);
+  const afterDiscount = applyDiscount(subtotal, discount);
+  const total = payableTotal(afterDiscount, payment);
 
   function addItem(item: MenuItem) {
     if (!item.available || item.sold_out) return;
@@ -92,10 +86,11 @@ function StudentPos() {
         actor: profile,
         studentPrefix: settings.student_order_prefix,
       });
-      await printerService.printHtml(studentReceiptHtml(order, settings));
+      const html = studentReceiptHtml(order, settings);
+      await issueReceipt(html, order.order_number, { print: true, kind: "student" });
       setLines([]);
       setDiscount(0);
-      setMessage(`${order.order_number} saved`);
+      setMessage(`${order.order_number} saved. Receipt stored in Supabase.`);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Could not save order");
     } finally {
@@ -107,68 +102,7 @@ function StudentPos() {
     <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
       <div>
         <PageHeader title={t("pos.title")} subtitle={t("pos.subtitle")} />
-        <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-          <button
-            type="button"
-            onClick={() => setCategory("Extra")}
-            className={cn(
-              "min-h-14 shrink-0 rounded-2xl px-6 text-lg font-extrabold",
-              category === "Extra" ? "bg-[var(--gold)] text-[var(--ink)]" : "bg-[var(--spice)] text-white",
-            )}
-          >
-            {t("extra")}
-          </button>
-          {["All", ...MENU_CATEGORIES.filter((cat) => cat !== "Extras")].map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setCategory(cat)}
-              className={cn(
-                "min-h-14 shrink-0 rounded-2xl px-4 font-semibold",
-                category === cat ? "bg-[var(--ink)] text-white" : "bg-white text-[var(--ink)]",
-              )}
-            >
-              {cat === "All" ? t("all") : t(`cats.${cat}`)}
-            </button>
-          ))}
-        </div>
-        {category === "Extra" && extraItems.length === 0 ? (
-          <EmptyState title={t("pos.noExtras")} body={t("pos.noExtrasBody")} />
-        ) : visible.length === 0 ? (
-          <EmptyState title={t("pos.noItems")} body={t("pos.noItemsBody")} />
-        ) : (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
-            {visible.map((item) => {
-              const disabled = !item.available || item.sold_out;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => addItem(item)}
-                  className={cn(
-                    "min-h-36 rounded-2xl border border-[var(--line)] bg-white p-3 text-start shadow-sm",
-                    disabled && "opacity-50",
-                  )}
-                >
-                  <div className="mb-2 flex h-20 items-center justify-center overflow-hidden rounded-xl bg-[var(--paper)]">
-                    {item.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.image_url} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <span className="text-3xl">🍛</span>
-                    )}
-                  </div>
-                  <p className="font-bold">{item.name}</p>
-                  <p className="text-[var(--spice)]">{formatSar(item.price_halalas)}</p>
-                  <p className="text-xs text-[var(--muted)]">
-                    {item.sold_out ? t("pos.soldOut") : item.available ? t("pos.available") : t("pos.unavailable")}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <MenuPicker items={items} onPick={addItem} />
       </div>
       <Card className="h-fit xl:sticky xl:top-4">
         <h3 className="font-display text-2xl">{t("pos.current")}</h3>
@@ -225,13 +159,19 @@ function StudentPos() {
             <span>{t("discount")}</span>
             <span>{formatSar(discount)}</span>
           </div>
+          {payment === "card" ? (
+            <div className="flex justify-between text-[var(--muted)]">
+              <span>{t("pos.cardOff")}</span>
+              <span>{formatSar(afterDiscount - total)}</span>
+            </div>
+          ) : null}
           <div className="flex justify-between font-bold">
             <span>{t("total")}</span>
             <span>{formatSar(total)}</span>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          {(["cash", "card", "mobile"] as PaymentMethod[]).map((method) => (
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          {(["cash", "card"] as PaymentMethod[]).map((method) => (
             <Button
               key={method}
               variant={payment === method ? "secondary" : "ghost"}

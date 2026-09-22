@@ -2,23 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FirebaseError } from "firebase/app";
 import { useAuth } from "@/hooks/useAuth";
 import { createOwnProfile } from "@/lib/firestore";
-import { FIRESTORE_RULES_TEXT } from "@/lib/firestoreRulesText";
 import { Button, Card } from "@/components/ui";
 import { useI18n } from "@/i18n/I18nProvider";
 import type { UserRole } from "@/types";
 
-const RULES_URL = "https://console.firebase.google.com/project/kakyah-madina/firestore/rules";
-const DATA_URL = "https://console.firebase.google.com/project/kakyah-madina/firestore/data";
+const SQL_URL = "https://supabase.com/dashboard/project/dspwrfcjdcowuymjazze/sql/new";
+const AUTH_URL = "https://supabase.com/dashboard/project/dspwrfcjdcowuymjazze/auth/users";
 
 export default function UnauthorizedPage() {
-  const { profile, firebaseUser, profileError, logout } = useAuth();
+  const { profile, firebaseUser, profileError, logout, refreshProfile } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState<"rules" | "uid" | "">("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -38,27 +35,17 @@ export default function UnauthorizedPage() {
         name: role === "owner" ? "Owner" : "Cashier",
         role,
       });
+      await refreshProfile();
     } catch (err) {
-      const code = err instanceof FirebaseError ? err.code : "";
       setError(
-        code.includes("permission")
-          ? "The live Firebase rules still block this write. Publish the rules below, wait a few seconds, then try again."
-          : err instanceof Error
-            ? err.message
-            : "Could not create the Firestore user profile.",
+        err instanceof Error
+          ? `${err.message} Run supabase/schema.sql in the SQL Editor if tables are missing.`
+          : "Could not create profile.",
       );
     } finally {
       setBusy(false);
     }
   }
-
-  async function copy(text: string, kind: "rules" | "uid") {
-    await navigator.clipboard.writeText(text);
-    setCopied(kind);
-  }
-
-  const suggestedRole =
-    firebaseUser?.email?.toLowerCase().includes("owner") ? "owner" : "cashier";
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
@@ -73,44 +60,22 @@ export default function UnauthorizedPage() {
         <ol className="mt-5 list-decimal space-y-3 ps-5 text-sm">
           <li>
             Open{" "}
-            <a className="font-bold text-[var(--spice)] underline" href={RULES_URL} target="_blank" rel="noreferrer">
-              Firestore Rules
-            </a>
+            <a className="font-bold text-[var(--spice)] underline" href={SQL_URL} target="_blank" rel="noreferrer">
+              Supabase SQL Editor
+            </a>{" "}
+            and run <strong>supabase/schema.sql</strong> from this project.
           </li>
           <li>
-            Select all old rules, delete them, paste the copied rules, then click{" "}
-            <strong>Publish</strong>.
-            <div className="mt-2">
-              <Button variant="ghost" onClick={() => void copy(FIRESTORE_RULES_TEXT, "rules")}>
-                {copied === "rules" ? t("access.rulesCopied") : t("access.copyRules")}
-              </Button>
-            </div>
+            Create staff in{" "}
+            <a className="font-bold text-[var(--spice)] underline" href={AUTH_URL} target="_blank" rel="noreferrer">
+              Authentication → Users
+            </a>
+            , then come back and set up the profile.
           </li>
-          <li>Wait about 10 seconds, come back here, and click Set up as {suggestedRole === "owner" ? "Owner" : "Cashier"}.</li>
         </ol>
 
         {firebaseUser ? (
-          <div className="mt-5 rounded-xl bg-[var(--paper)] p-3 text-sm">
-            <p className="font-bold">Or create the document by hand</p>
-            <p className="mt-2">
-              Open{" "}
-              <a className="font-bold text-[var(--spice)] underline" href={DATA_URL} target="_blank" rel="noreferrer">
-                Firestore Data
-              </a>
-              , collection <strong>users</strong>, document ID:
-            </p>
-            <p className="mt-1 break-all font-mono">{firebaseUser.uid}</p>
-            <Button className="mt-2" variant="ghost" onClick={() => void copy(firebaseUser.uid, "uid")}>
-              {copied === "uid" ? t("access.uidCopied") : t("access.copyUid")}
-            </Button>
-            <p className="mt-3">name: {suggestedRole === "owner" ? "Owner" : "Cashier"} (string)</p>
-            <p>email: {firebaseUser.email} (string)</p>
-            <p>role: {suggestedRole} (string)</p>
-            <p>inventory_access: true (boolean)</p>
-            <p>active: true (boolean)</p>
-            <p>created_at: 1 (number)</p>
-            <p>updated_at: 1 (number)</p>
-          </div>
+          <p className="mt-4 break-all rounded-xl bg-[var(--paper)] p-3 font-mono text-xs">{firebaseUser.uid}</p>
         ) : null}
 
         {!profile && firebaseUser ? (

@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { ProtectedPage } from "@/components/ProtectedPage";
 import { Button, Card, PageHeader } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
-import { listenUsers, saveEmployee } from "@/services/catalog";
+import { createStaffAccount, listenUsers, saveEmployee } from "@/services/catalog";
 import type { AppUser, UserRole } from "@/types";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -20,10 +20,12 @@ function Employees() {
   const { profile } = useAuth();
   const { t } = useI18n();
   const [users, setUsers] = useState<AppUser[]>([]);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
-    id: "",
     name: "",
     email: "",
+    password: "",
     role: "cashier" as UserRole,
     inventory_access: true,
     active: true,
@@ -34,15 +36,23 @@ function Employees() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (!profile) return;
-    await saveEmployee(form, profile);
-    setForm({
-      id: "",
-      name: "",
-      email: "",
-      role: "cashier",
-      inventory_access: true,
-      active: true,
-    });
+    setBusy(true);
+    setError("");
+    try {
+      await createStaffAccount(form);
+      setForm({
+        name: "",
+        email: "",
+        password: "",
+        role: "cashier",
+        inventory_access: true,
+        active: true,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create staff.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -50,12 +60,7 @@ function Employees() {
       <PageHeader title={t("employees.title")} subtitle={t("employees.subtitle")} />
       <Card className="mb-4">
         <form onSubmit={onSubmit} className="grid gap-3 md:grid-cols-2">
-          <input
-            required
-            placeholder={t("employees.uid")}
-            value={form.id}
-            onChange={(e) => setForm({ ...form, id: e.target.value })}
-          />
+          {error ? <p className="md:col-span-2 text-sm text-red-700">{error}</p> : null}
           <input
             required
             placeholder={t("employees.name")}
@@ -68,6 +73,14 @@ function Employees() {
             placeholder={t("email")}
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
+          />
+          <input
+            required
+            type="password"
+            minLength={6}
+            placeholder={t("password")}
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
           />
           <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}>
             <option value="cashier">{t("role.cashier")}</option>
@@ -89,7 +102,9 @@ function Employees() {
             />
             {t("employees.active")}
           </label>
-          <Button type="submit">{t("employees.save")}</Button>
+          <Button type="submit" disabled={busy}>
+            {busy ? t("saving") : t("employees.save")}
+          </Button>
         </form>
       </Card>
       <div className="space-y-3">

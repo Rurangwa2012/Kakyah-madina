@@ -1,22 +1,9 @@
-import {
-  addDoc,
-  collection,
-  doc,
-  limit,
-  orderBy,
-  query,
-  runTransaction,
-  serverTimestamp,
-  updateDoc,
-  where,
-  type Unsubscribe,
-} from "firebase/firestore";
-import { GROUP_COUNTER_ID, STUDENT_COUNTER_ID, COLLECTIONS } from "@/lib/collections";
-import { getDb } from "@/lib/firebase";
+import { GROUP_COUNTER_ID, STUDENT_COUNTER_ID } from "@/lib/collections";
 import { bumpDailySummary, nextOrderNumber, paymentIncrement, writeAuditLog } from "@/lib/firestore";
-import { listenDocs } from "@/lib/listen";
+import { listenQuery, type Unsubscribe } from "@/lib/listen";
+import { getSupabase, throwIfError } from "@/lib/supabase";
 import { toDateKey } from "@/utils/date";
-import { applyDiscount, orderSubtotal } from "@/utils/money";
+import { applyDiscount, orderSubtotal, payableTotal } from "@/utils/money";
 import type {
   AppUser,
   GroupOrder,
@@ -27,22 +14,78 @@ import type {
   StudentOrder,
 } from "@/types";
 
+function mapOrder(row: Record<string, unknown>): StudentOrder {
+  return {
+    id: String(row.id),
+    order_number: String(row.order_number),
+    type: "student",
+    lines: Array.isArray(row.lines) ? (row.lines as OrderLine[]) : [],
+    subtotal_halalas: Number(row.subtotal_halalas ?? 0),
+    discount_halalas: Number(row.discount_halalas ?? 0),
+    total_halalas: Number(row.total_halalas ?? 0),
+    payment_method: row.payment_method as PaymentMethod,
+    status: row.status as StudentOrder["status"],
+    cashier_id: String(row.cashier_id ?? ""),
+    cashier_name: String(row.cashier_name ?? ""),
+    created_at: Number(row.created_at ?? 0),
+    updated_at: Number(row.updated_at ?? 0),
+    date_key: String(row.date_key ?? ""),
+  };
+}
+
+function mapGroup(row: Record<string, unknown>): GroupOrder {
+  return {
+    id: String(row.id),
+    order_number: String(row.order_number),
+    type: "group",
+    group_name: String(row.group_name ?? ""),
+    contact_number: String(row.contact_number ?? ""),
+    location: String(row.location ?? ""),
+    food_description: String(row.food_description ?? ""),
+    lines: Array.isArray(row.lines) ? (row.lines as OrderLine[]) : [],
+    quantity: Number(row.quantity ?? 0),
+    fulfillment: row.fulfillment as GroupOrder["fulfillment"],
+    pickup_time: Number(row.pickup_time ?? 0),
+    payment_status: row.payment_status as GroupPaymentStatus,
+    status: row.status as GroupOrderStatus,
+    total_halalas: Number(row.total_halalas ?? 0),
+    cashier_id: String(row.cashier_id ?? ""),
+    cashier_name: String(row.cashier_name ?? ""),
+    created_at: Number(row.created_at ?? 0),
+    updated_at: Number(row.updated_at ?? 0),
+    date_key: String(row.date_key ?? ""),
+  };
+}
+
 export function listenTodayOrders(cb: (orders: StudentOrder[]) => void): Unsubscribe {
-  return listenDocs(
-    query(
-      collection(getDb(), COLLECTIONS.orders),
-      where("date_key", "==", toDateKey()),
-      orderBy("created_at", "desc"),
-    ),
-    (id, data) => ({ id, ...(data as Omit<StudentOrder, "id">) }),
+  const today = toDateKey();
+  return listenQuery(
+    "orders",
+    async () => {
+      const { data, error } = await getSupabase()
+        .from("orders")
+        .select("*")
+        .eq("date_key", today)
+        .order("created_at", { ascending: false });
+      throwIfError(error);
+      return (data ?? []).map((row) => mapOrder(row as Record<string, unknown>));
+    },
     cb,
   );
 }
 
 export function listenRecentOrders(cb: (orders: StudentOrder[]) => void): Unsubscribe {
-  return listenDocs(
-    query(collection(getDb(), COLLECTIONS.orders), orderBy("created_at", "desc"), limit(40)),
-    (id, data) => ({ id, ...(data as Omit<StudentOrder, "id">) }),
+  return listenQuery(
+    "orders",
+    async () => {
+      const { data, error } = await getSupabase()
+        .from("orders")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(40);
+      throwIfError(error);
+      return (data ?? []).map((row) => mapOrder(row as Record<string, unknown>));
+    },
     cb,
   );
 }
@@ -55,11 +98,8 @@ export async function createStudentOrder(input: {
   studentPrefix?: string;
 }): Promise<StudentOrder> {
   const subtotal = orderSubtotal(input.lines);
-  const total = applyDiscount(subtotal, input.discount_halalas);
-  const order_number = await nextOrderNumber(
-    STUDENT_COUNTER_ID,
-    input.studentPrefix ?? "S",
-  );
+  const total = payableTotal(applyDiscount(subtotal, input.discount_halalas), input.payment_method);
+  const order_number = await nextOrderNumber(STUDENT_COUNTER_ID, input.studentPrefix ?? "S");
   const now = Date.now();
   const payload = {
     order_number,
@@ -75,10 +115,10 @@ export async function createStudentOrder(input: {
     created_at: now,
     updated_at: now,
     date_key: toDateKey(),
-    server_created_at: serverTimestamp(),
-    client_request_id: `${input.actor.id}-${now}`,
   };
-  const ref = await addDoc(collection(getDb(), COLLECTIONS.orders), payload);
+  const { data, error } = await getSupabase().from("orders").insert(payload).select("id").single();
+  throwIfError(error);
+  if (!data) throw new Error("Could not save order");
   await bumpDailySummary({
     totalSales: total,
     studentSales: total,
@@ -94,7 +134,7 @@ export async function createStudentOrder(input: {
     actor_role: input.actor.role,
     meta: { order_number, total },
   });
-  return { id: ref.id, ...payload };
+  return { id: String(data.id), ...payload };
 }
 
 export async function cancelStudentOrder(
@@ -102,19 +142,16 @@ export async function cancelStudentOrder(
   actor: AppUser,
   refund = false,
 ): Promise<void> {
-  const db = getDb();
-  const orderRef = doc(db, COLLECTIONS.orders, order.id);
-  const current = await runTransaction(db, async (tx) => {
-    const snap = await tx.get(orderRef);
-    if (!snap.exists()) throw new Error("Order not found");
-    const data = snap.data() as StudentOrder;
-    if (data.status !== "completed") throw new Error("Order already closed");
-    tx.update(orderRef, {
-      status: refund ? "refunded" : "cancelled",
-      updated_at: Date.now(),
-    });
-    return data;
-  });
+  const { data, error } = await getSupabase().from("orders").select("*").eq("id", order.id).single();
+  throwIfError(error);
+  const current = mapOrder(data as Record<string, unknown>);
+  if (current.status !== "completed") throw new Error("Order already closed");
+  const { error: upd } = await getSupabase()
+    .from("orders")
+    .update({ status: refund ? "refunded" : "cancelled", updated_at: Date.now() })
+    .eq("id", order.id)
+    .eq("status", "completed");
+  throwIfError(upd);
   const reverse = -current.total_halalas;
   await bumpDailySummary({
     dateKey: current.date_key,
@@ -134,10 +171,16 @@ export async function cancelStudentOrder(
 }
 
 export function listenGroupOrders(cb: (orders: GroupOrder[]) => void): Unsubscribe {
-  return listenDocs(
-    collection(getDb(), COLLECTIONS.groupOrders),
-    (id, data) => ({ id, ...(data as Omit<GroupOrder, "id">) }),
-    (orders) => cb([...orders].sort((a, b) => a.pickup_time - b.pickup_time)),
+  return listenQuery(
+    "group_orders",
+    async () => {
+      const { data, error } = await getSupabase().from("group_orders").select("*");
+      throwIfError(error);
+      return (data ?? [])
+        .map((row) => mapGroup(row as Record<string, unknown>))
+        .sort((a, b) => a.pickup_time - b.pickup_time);
+    },
+    cb,
   );
 }
 
@@ -146,6 +189,7 @@ export async function createGroupOrder(input: {
   contact_number: string;
   location: string;
   food_description: string;
+  lines: OrderLine[];
   quantity: number;
   fulfillment: GroupOrder["fulfillment"];
   pickup_time: number;
@@ -163,6 +207,7 @@ export async function createGroupOrder(input: {
     contact_number: input.contact_number,
     location: input.location,
     food_description: input.food_description,
+    lines: input.lines,
     quantity: Math.round(input.quantity),
     fulfillment: input.fulfillment,
     pickup_time: input.pickup_time,
@@ -174,9 +219,17 @@ export async function createGroupOrder(input: {
     created_at: now,
     updated_at: now,
     date_key: toDateKey(new Date(input.pickup_time)),
-    server_created_at: serverTimestamp(),
   };
-  const ref = await addDoc(collection(getDb(), COLLECTIONS.groupOrders), payload);
+  let { data, error } = await getSupabase().from("group_orders").insert(payload).select("id").single();
+  if (error && /lines/i.test(error.message)) {
+    const withoutLines = { ...payload };
+    delete (withoutLines as { lines?: OrderLine[] }).lines;
+    const retry = await getSupabase().from("group_orders").insert(withoutLines).select("id").single();
+    data = retry.data;
+    error = retry.error;
+  }
+  throwIfError(error);
+  if (!data) throw new Error("Could not save group order");
   if (input.payment_status === "paid" && input.total_halalas > 0) {
     await bumpDailySummary({
       dateKey: payload.date_key,
@@ -199,7 +252,7 @@ export async function createGroupOrder(input: {
     actor_name: input.actor.name,
     actor_role: input.actor.role,
   });
-  return { id: ref.id, ...payload };
+  return { id: String(data.id), ...payload };
 }
 
 export async function updateGroupOrderStatus(
@@ -207,10 +260,11 @@ export async function updateGroupOrderStatus(
   status: GroupOrderStatus,
   actor: AppUser,
 ): Promise<void> {
-  await updateDoc(doc(getDb(), COLLECTIONS.groupOrders, order.id), {
-    status,
-    updated_at: Date.now(),
-  });
+  const { error } = await getSupabase()
+    .from("group_orders")
+    .update({ status, updated_at: Date.now() })
+    .eq("id", order.id);
+  throwIfError(error);
   await writeAuditLog({
     action: status === "completed" ? "GROUP_ORDER_COMPLETED" : "GROUP_ORDER_CANCELLED",
     message: `${actor.name} marked ${order.order_number} ${status}`,

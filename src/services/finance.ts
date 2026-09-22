@@ -1,23 +1,20 @@
-import {
-  addDoc,
-  collection,
-  query,
-  serverTimestamp,
-  where,
-  type Unsubscribe,
-} from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/collections";
-import { getDb } from "@/lib/firebase";
 import { bumpDailySummary, writeAuditLog } from "@/lib/firestore";
-import { listenDocs } from "@/lib/listen";
+import { listenQuery, type Unsubscribe } from "@/lib/listen";
+import { getSupabase, throwIfError } from "@/lib/supabase";
 import { toDateKey } from "@/utils/date";
 import type { AppUser, AuditLog, DailySummary, Expense } from "@/types";
 
 export function listenExpenses(cb: (rows: Expense[]) => void): Unsubscribe {
-  return listenDocs(
-    collection(getDb(), COLLECTIONS.expenses),
-    (id, data) => ({ id, ...(data as Omit<Expense, "id">) }),
-    (rows) => cb([...rows].sort((a, b) => b.created_at - a.created_at)),
+  return listenQuery(
+    "expenses",
+    async () => {
+      const { data, error } = await getSupabase().from("expenses").select("*");
+      throwIfError(error);
+      return (data ?? [])
+        .map((row) => ({ id: String(row.id), ...(row as Omit<Expense, "id">) }))
+        .sort((a, b) => b.created_at - a.created_at);
+    },
+    cb,
   );
 }
 
@@ -25,12 +22,12 @@ export async function createExpense(
   input: Omit<Expense, "id" | "created_at">,
   actor: AppUser,
 ): Promise<void> {
-  await addDoc(collection(getDb(), COLLECTIONS.expenses), {
+  const { error } = await getSupabase().from("expenses").insert({
     ...input,
     amount_halalas: Math.round(input.amount_halalas),
     created_at: Date.now(),
-    server_created_at: serverTimestamp(),
   });
+  throwIfError(error);
   await bumpDailySummary({
     dateKey: input.date_key,
     expenses: Math.round(input.amount_halalas),
@@ -45,10 +42,21 @@ export async function createExpense(
 }
 
 export function listenAuditLogs(cb: (rows: AuditLog[]) => void): Unsubscribe {
-  return listenDocs(
-    collection(getDb(), COLLECTIONS.auditLogs),
-    (id, data) => ({ id, ...(data as Omit<AuditLog, "id">) }),
-    (rows) => cb([...rows].sort((a, b) => b.created_at - a.created_at).slice(0, 200)),
+  return listenQuery(
+    "audit_logs",
+    async () => {
+      const { data, error } = await getSupabase()
+        .from("audit_logs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      throwIfError(error);
+      return (data ?? []).map((row) => ({
+        id: String(row.id),
+        ...(row as Omit<AuditLog, "id">),
+      }));
+    },
+    cb,
   );
 }
 
@@ -57,14 +65,22 @@ export function listenDailySummaries(
   endDate: string,
   cb: (rows: DailySummary[]) => void,
 ): Unsubscribe {
-  return listenDocs(
-    query(
-      collection(getDb(), COLLECTIONS.dailySummaries),
-      where("date", ">=", startDate),
-      where("date", "<=", endDate),
-    ),
-    (id, data) => ({ id, ...(data as Omit<DailySummary, "id">) }),
-    (rows) => cb([...rows].sort((a, b) => a.date.localeCompare(b.date))),
+  return listenQuery(
+    "daily_summaries",
+    async () => {
+      const { data, error } = await getSupabase()
+        .from("daily_summaries")
+        .select("*")
+        .gte("date", startDate)
+        .lte("date", endDate)
+        .order("date", { ascending: true });
+      throwIfError(error);
+      return (data ?? []).map((row) => ({
+        id: String(row.id),
+        ...(row as Omit<DailySummary, "id">),
+      }));
+    },
+    cb,
   );
 }
 

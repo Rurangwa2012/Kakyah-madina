@@ -113,6 +113,7 @@ export interface GroupOrder {
   contact_number: string;
   location: string;
   food_description: string;
+  lines: OrderLine[];
   quantity: number;
   fulfillment: GroupFulfillment;
   pickup_time: number;

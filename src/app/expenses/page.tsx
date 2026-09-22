@@ -84,7 +84,6 @@ function ExpensesView() {
           >
             <option value="cash">{t("cash")}</option>
             <option value="card">{t("card")}</option>
-            <option value="mobile">{t("mobile")}</option>
           </select>
           <input type="date" value={form.date_key} onChange={(e) => setForm({ ...form, date_key: e.target.value })} />
           <Button type="submit">{t("expenses.save")}</Button>

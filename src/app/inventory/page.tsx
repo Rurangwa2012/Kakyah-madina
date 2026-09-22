@@ -31,7 +31,7 @@ function InventoryView() {
   const [history, setHistory] = useState<StockMovement[]>([]);
   const [selected, setSelected] = useState<InventoryItem | null>(null);
   const [qty, setQty] = useState(0);
-  const [note, setNote] = useState("Supplier delivery");
+  const [note, setNote] = useState("");
   const [type, setType] = useState<StockMovementType>("stock_in");
   const [newItem, setNewItem] = useState({ name: "", unit: "kg", quantity: 0, min_stock: 5 });
 
@@ -45,7 +45,7 @@ function InventoryView() {
       inventoryId: selected.id,
       type,
       quantity: qty,
-      note,
+      note: note.trim() || t("inventory.defaultNote"),
       actor: profile,
     });
     setQty(0);
@@ -146,7 +146,7 @@ function InventoryView() {
             </div>
             <div>
               <label>{t("inventory.note")}</label>
-              <input value={note} onChange={(e) => setNote(e.target.value)} />
+              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("inventory.defaultNote")} />
             </div>
             <Button type="submit" disabled={!selected}>
               {t("save")}
@@ -186,7 +186,7 @@ function InventoryView() {
           <h3 className="font-display text-2xl">{t("inventory.addItem")}</h3>
           <form onSubmit={createItem} className="mt-3 grid gap-3 md:grid-cols-4">
             <input
-              placeholder={t("employees.name")}
+              placeholder={t("inventory.itemName")}
               value={newItem.name}
               onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
               required

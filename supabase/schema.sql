@@ -462,3 +462,5 @@ create policy receipts_write on storage.objects for insert to authenticated
 drop policy if exists receipts_update on storage.objects;
 create policy receipts_update on storage.objects for update to authenticated
   using (bucket_id = 'receipts' and public.is_staff());
+
+-- Production POS hardening: also run supabase/migrations/202609240001_production_pos.sql

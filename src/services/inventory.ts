@@ -11,6 +11,7 @@ function mapInv(row: Record<string, unknown>): InventoryItem {
     quantity: Number(row.quantity ?? 0),
     unit: String(row.unit ?? ""),
     min_stock: Number(row.min_stock ?? 0),
+    reorder_level: Number(row.reorder_level ?? row.min_stock ?? 0),
     status: row.status as InventoryItem["status"],
     cost_halalas: Number(row.cost_halalas ?? 0),
     last_updated: Number(row.last_updated ?? 0),
@@ -94,52 +95,19 @@ export function listenStockMovements(
 
 export async function applyStockChange(input: {
   inventoryId: string;
-  type: StockMovementType;
+  type: StockMovementType | "receive" | "count_adjustment" | "purchase";
   quantity: number;
   note: string;
   actor: AppUser;
 }): Promise<void> {
-  const { data, error } = await getSupabase().from("inventory").select("*").eq("id", input.inventoryId).single();
+  const { error } = await getSupabase().rpc("record_stock_change", {
+    p_inventory_id: input.inventoryId,
+    p_type: input.type,
+    p_quantity: input.quantity,
+    p_note: input.note,
+  });
   throwIfError(error);
-  const item = mapInv(data as Record<string, unknown>);
-  const delta =
-    input.type === "correction"
-      ? input.quantity
-      : input.type === "stock_in"
-        ? Math.abs(input.quantity)
-        : -Math.abs(input.quantity);
-  const previous = Number(item.quantity ?? 0);
-  const nextQty = Math.max(0, previous + delta);
-  const { error: upd } = await getSupabase()
-    .from("inventory")
-    .update({
-      quantity: nextQty,
-      status: inventoryStatus(nextQty, Number(item.min_stock ?? 0)),
-      last_updated: Date.now(),
-    })
-    .eq("id", input.inventoryId);
-  throwIfError(upd);
-  const { error: moveErr } = await getSupabase().from("stock_movements").insert({
-    inventory_id: input.inventoryId,
-    item_name: item.name,
-    type: input.type,
-    quantity: Math.abs(input.quantity),
-    unit: item.unit,
-    previous_quantity: previous,
-    new_quantity: nextQty,
-    note: input.note,
-    created_by: input.actor.id,
-    created_by_name: input.actor.name,
-    created_at: Date.now(),
-  });
-  throwIfError(moveErr);
-  await writeAuditLog({
-    action: input.type === "waste" ? "WASTE_RECORDED" : input.type === "stock_in" ? "STOCK_ADDED" : "STOCK_UPDATED",
-    message: `${input.actor.name} ${input.type.replace("_", " ")} ${input.quantity} on inventory`,
-    actor_id: input.actor.id,
-    actor_name: input.actor.name,
-    actor_role: input.actor.role,
-  });
+  void input.actor;
 }
 
 export async function markInventoryStatus(

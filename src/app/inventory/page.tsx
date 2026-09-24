@@ -31,6 +31,7 @@ function InventoryView() {
   const [history, setHistory] = useState<StockMovement[]>([]);
   const [selected, setSelected] = useState<InventoryItem | null>(null);
   const [qty, setQty] = useState(0);
+  const [counted, setCounted] = useState(0);
   const [note, setNote] = useState("");
   const [type, setType] = useState<StockMovementType>("stock_in");
   const [newItem, setNewItem] = useState({ name: "", unit: "kg", quantity: 0, min_stock: 5 });
@@ -151,6 +152,29 @@ function InventoryView() {
             <Button type="submit" disabled={!selected}>
               {t("save")}
             </Button>
+            {selected ? (
+              <div className="space-y-2">
+                <label>{t("inventory.count")}</label>
+                <input type="number" step="0.01" value={counted} onChange={(e) => setCounted(Number(e.target.value))} />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() =>
+                    selected &&
+                    profile &&
+                    void applyStockChange({
+                      inventoryId: selected.id,
+                      type: "count_adjustment",
+                      quantity: counted,
+                      note: note.trim() || "count",
+                      actor: profile,
+                    })
+                  }
+                >
+                  {t("inventory.saveCount")}
+                </Button>
+              </div>
+            ) : null}
             {selected ? (
               <div className="flex gap-2">
                 <Button

@@ -52,7 +52,7 @@ export function paymentIncrement(
   amount: number,
 ): { cashSales?: number; cardSales?: number; mobileSales?: number } {
   if (method === "cash") return { cashSales: amount };
-  if (method === "card") return { cardSales: amount };
+  if (method === "card" || method === "mada" || method === "apple_pay") return { cardSales: amount };
   return { mobileSales: amount };
 }
 

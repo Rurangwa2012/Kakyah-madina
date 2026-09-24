@@ -132,25 +132,15 @@ function OrdersView() {
                       >
                         {t("saveReceipt")}
                       </Button>
-                      {isOwner && order.status === "completed" ? (
-                        <>
-                          <Button
-                            variant="danger"
-                            className="min-h-10 text-sm"
-                            disabled={busyId === order.id}
-                            onClick={() => void closeOrder(order, false)}
-                          >
-                            {t("cancel")}
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            className="min-h-10 text-sm"
-                            disabled={busyId === order.id}
-                            onClick={() => void closeOrder(order, true)}
-                          >
-                            {t("refund")}
-                          </Button>
-                        </>
+                      {order.status === "completed" || order.status === "paid" ? (
+                        <Button
+                          variant="secondary"
+                          className="min-h-10 text-sm"
+                          disabled={busyId === order.id}
+                          onClick={() => void closeOrder(order, true)}
+                        >
+                          {t("refund")}
+                        </Button>
                       ) : null}
                     </div>
                   </td>

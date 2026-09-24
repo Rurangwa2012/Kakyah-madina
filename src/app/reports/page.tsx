@@ -49,6 +49,10 @@ function Reports() {
         acc.cash_sales_halalas += row.cash_sales_halalas;
         acc.card_sales_halalas += row.card_sales_halalas;
         acc.mobile_sales_halalas += row.mobile_sales_halalas;
+        acc.mada_sales_halalas += row.mada_sales_halalas ?? 0;
+        acc.apple_pay_sales_halalas += row.apple_pay_sales_halalas ?? 0;
+        acc.refunds_halalas += row.refunds_halalas ?? 0;
+        acc.discounts_halalas += row.discounts_halalas ?? 0;
         acc.expenses_halalas += row.expenses_halalas;
         acc.order_count += row.order_count;
         return acc;
@@ -86,7 +90,11 @@ function Reports() {
         <Card>{t("reports.studentSales")}: {formatSar(totals.student_sales_halalas)}</Card>
         <Card>{t("reports.groupSales")}: {formatSar(totals.group_sales_halalas)}</Card>
         <Card>{t("cash")}: {formatSar(totals.cash_sales_halalas)}</Card>
+        <Card>{t("mada")}: {formatSar(totals.mada_sales_halalas)}</Card>
         <Card>{t("card")}: {formatSar(totals.card_sales_halalas)}</Card>
+        <Card>{t("apple_pay")}: {formatSar(totals.apple_pay_sales_halalas)}</Card>
+        <Card>{t("refund")}: {formatSar(totals.refunds_halalas)}</Card>
+        <Card>{t("discount")}: {formatSar(totals.discounts_halalas)}</Card>
         <Card>{t("reports.expenses")}: {formatSar(totals.expenses_halalas)}</Card>
         <Card>{t("reports.profit")}: {formatSar(totals.total_sales_halalas - totals.expenses_halalas)}</Card>
         <Card>{t("reports.orders")}: {totals.order_count}</Card>

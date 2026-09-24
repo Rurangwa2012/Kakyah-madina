@@ -138,10 +138,22 @@ const defaultSettings = (): RestaurantSettings => ({
   receipt_footer: "Thank You",
   student_order_prefix: "S",
   group_order_prefix: "U",
-  payment_methods: ["cash", "card"],
+  payment_methods: ["cash", "mada", "card", "apple_pay"],
   low_stock_alert: true,
   printer: { type: "browser", paper_width_mm: 80 },
-  owner_approval_required: false,
+  owner_approval_required: true,
+  vat_enabled: true,
+  vat_inclusive: true,
+  vat_rate_basis_points: 1500,
+  vat_registration_number: "",
+  seller_legal_name_ar: "كاك ياه ناسي كندر",
+  seller_legal_name_en: "Kak Yah Nasi Kandar",
+  address_ar: "",
+  address_en: "",
+  require_open_shift: true,
+  lock_minutes: 10,
+  cashier_max_discount_halalas: 0,
+  default_terminal_id: "POS-01",
   updated_at: Date.now(),
 });
 
@@ -153,15 +165,18 @@ export async function getSettings(): Promise<RestaurantSettings> {
     .maybeSingle();
   throwIfError(error);
   if (!data) return defaultSettings();
+  const methods = (Array.isArray(data.payment_methods) ? data.payment_methods : ["cash", "mada", "card", "apple_pay"]) as unknown[];
+  const allowed: PaymentMethod[] = ["cash", "mada", "card", "apple_pay", "mobile", "other"];
   return {
+    ...defaultSettings(),
     id: String(data.id),
     restaurant_name: String(data.restaurant_name),
-    currency: String(data.currency),
-    receipt_footer: String(data.receipt_footer),
-    student_order_prefix: String(data.student_order_prefix),
-    group_order_prefix: String(data.group_order_prefix),
-    payment_methods: (Array.isArray(data.payment_methods) ? data.payment_methods : (["cash", "card"] as PaymentMethod[])).filter(
-      (method: unknown): method is PaymentMethod => method === "cash" || method === "card",
+    currency: String(data.currency ?? "SAR"),
+    receipt_footer: String(data.receipt_footer ?? ""),
+    student_order_prefix: String(data.student_order_prefix ?? "S"),
+    group_order_prefix: String(data.group_order_prefix ?? "U"),
+    payment_methods: methods.filter((method): method is PaymentMethod =>
+      allowed.includes(method as PaymentMethod),
     ),
     low_stock_alert: Boolean(data.low_stock_alert),
     printer:
@@ -169,6 +184,18 @@ export async function getSettings(): Promise<RestaurantSettings> {
         ? (data.printer as RestaurantSettings["printer"])
         : { type: "browser", paper_width_mm: 80 },
     owner_approval_required: Boolean(data.owner_approval_required),
+    vat_enabled: data.vat_enabled !== false,
+    vat_inclusive: data.vat_inclusive !== false,
+    vat_rate_basis_points: Number(data.vat_rate_basis_points ?? 1500),
+    vat_registration_number: String(data.vat_registration_number ?? ""),
+    seller_legal_name_ar: String(data.seller_legal_name_ar ?? "كاك ياه ناسي كندر"),
+    seller_legal_name_en: String(data.seller_legal_name_en ?? "Kak Yah Nasi Kandar"),
+    address_ar: String(data.address_ar ?? ""),
+    address_en: String(data.address_en ?? ""),
+    require_open_shift: data.require_open_shift !== false,
+    lock_minutes: Number(data.lock_minutes ?? 10),
+    cashier_max_discount_halalas: Number(data.cashier_max_discount_halalas ?? 0),
+    default_terminal_id: String(data.default_terminal_id ?? "POS-01"),
     updated_at: Number(data.updated_at ?? Date.now()),
   };
 }

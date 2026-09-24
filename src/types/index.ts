@@ -1,10 +1,17 @@
 export type UserRole = "owner" | "cashier";
 
-export type PaymentMethod = "cash" | "card" | "mobile";
+export type PaymentMethod = "cash" | "mada" | "card" | "apple_pay" | "mobile" | "other";
 
-export type OrderStatus = "completed" | "cancelled" | "refunded";
+export type OrderStatus =
+  | "draft"
+  | "pending_payment"
+  | "paid"
+  | "completed"
+  | "cancelled"
+  | "partially_refunded"
+  | "refunded";
 
-export type GroupPaymentStatus = "paid" | "not_paid";
+export type GroupPaymentStatus = "paid" | "not_paid" | "partially_paid";
 
 export type GroupOrderStatus = "pending" | "completed" | "cancelled";
 
@@ -52,7 +59,16 @@ export type AuditAction =
   | "EMPLOYEE_CREATED"
   | "EMPLOYEE_UPDATED"
   | "SETTINGS_UPDATED"
-  | "BUFFET_UPDATED";
+  | "BUFFET_UPDATED"
+  | "SHIFT_OPENED"
+  | "SHIFT_CLOSED"
+  | "CASH_MOVEMENT"
+  | "PAYMENT_COMPLETED"
+  | "REFUND_REQUESTED"
+  | "REFUND_APPROVED"
+  | "DISCOUNT_APPLIED"
+  | "STOCK_ADJUSTED"
+  | "ZATCA_SETTING_CHANGED";
 
 export interface AppUser {
   id: string;
@@ -103,6 +119,14 @@ export interface StudentOrder {
   created_at: number;
   updated_at: number;
   date_key: string;
+  vat_amount_halalas?: number;
+  vat_rate_basis_points?: number;
+  subtotal_ex_vat_halalas?: number;
+  total_inc_vat_halalas?: number;
+  terminal_id?: string;
+  shift_id?: string;
+  invoice_uuid?: string;
+  zatca_status?: string;
 }
 
 export interface GroupOrder {
@@ -135,6 +159,7 @@ export interface InventoryItem {
   min_stock: number;
   status: InventoryStatus;
   cost_halalas: number;
+  reorder_level: number;
   last_updated: number;
   created_at: number;
 }
@@ -200,6 +225,10 @@ export interface DailySummary {
   cash_sales_halalas: number;
   card_sales_halalas: number;
   mobile_sales_halalas: number;
+  mada_sales_halalas: number;
+  apple_pay_sales_halalas: number;
+  refunds_halalas: number;
+  discounts_halalas: number;
   order_count: number;
   student_order_count: number;
   group_order_count: number;
@@ -222,6 +251,18 @@ export interface RestaurantSettings {
     network_address?: string;
   };
   owner_approval_required: boolean;
+  vat_enabled: boolean;
+  vat_inclusive: boolean;
+  vat_rate_basis_points: number;
+  vat_registration_number: string;
+  seller_legal_name_ar: string;
+  seller_legal_name_en: string;
+  address_ar: string;
+  address_en: string;
+  require_open_shift: boolean;
+  lock_minutes: number;
+  cashier_max_discount_halalas: number;
+  default_terminal_id: string;
   updated_at: number;
 }
 

@@ -107,6 +107,85 @@ function SettingsView() {
             />
             {t("settings.approval")}
           </label>
+          <label className="flex items-center gap-2 md:col-span-2">
+            <input
+              type="checkbox"
+              checked={settings.vat_enabled}
+              onChange={(e) => setSettings({ ...settings, vat_enabled: e.target.checked })}
+            />
+            {t("settings.vatEnabled")}
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={settings.vat_inclusive}
+              onChange={(e) => setSettings({ ...settings, vat_inclusive: e.target.checked })}
+            />
+            {t("settings.vatInclusive")}
+          </label>
+          <div>
+            <label>{t("settings.vatBps")}</label>
+            <input
+              type="number"
+              value={settings.vat_rate_basis_points}
+              onChange={(e) => setSettings({ ...settings, vat_rate_basis_points: Number(e.target.value) || 0 })}
+            />
+          </div>
+          <div>
+            <label>{t("settings.vatNo")}</label>
+            <input
+              value={settings.vat_registration_number}
+              onChange={(e) => setSettings({ ...settings, vat_registration_number: e.target.value })}
+            />
+          </div>
+          <div>
+            <label>{t("settings.legalAr")}</label>
+            <input
+              value={settings.seller_legal_name_ar}
+              onChange={(e) => setSettings({ ...settings, seller_legal_name_ar: e.target.value })}
+            />
+          </div>
+          <div>
+            <label>{t("settings.legalEn")}</label>
+            <input
+              value={settings.seller_legal_name_en}
+              onChange={(e) => setSettings({ ...settings, seller_legal_name_en: e.target.value })}
+            />
+          </div>
+          <div>
+            <label>{t("settings.addressAr")}</label>
+            <input value={settings.address_ar} onChange={(e) => setSettings({ ...settings, address_ar: e.target.value })} />
+          </div>
+          <div>
+            <label>{t("settings.addressEn")}</label>
+            <input value={settings.address_en} onChange={(e) => setSettings({ ...settings, address_en: e.target.value })} />
+          </div>
+          <div>
+            <label>{t("settings.lockMinutes")}</label>
+            <input
+              type="number"
+              min={1}
+              value={settings.lock_minutes}
+              onChange={(e) => setSettings({ ...settings, lock_minutes: Number(e.target.value) || 10 })}
+            />
+          </div>
+          <div>
+            <label>{t("settings.cashierDiscount")}</label>
+            <input
+              type="number"
+              min={0}
+              value={settings.cashier_max_discount_halalas}
+              onChange={(e) => setSettings({ ...settings, cashier_max_discount_halalas: Number(e.target.value) || 0 })}
+            />
+          </div>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={settings.require_open_shift}
+              onChange={(e) => setSettings({ ...settings, require_open_shift: e.target.checked })}
+            />
+            {t("settings.requireShift")}
+          </label>
           <div className="flex gap-2 md:col-span-2">
             <Button type="submit">{t("settings.save")}</Button>
             <Button variant="ghost" onClick={() => void printerService.printHtml(testReceiptHtml)}>

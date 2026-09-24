@@ -1,6 +1,7 @@
 import type { OrderLine, StudentOrder, RestaurantSettings } from "@/types";
 import { formatSar } from "@/utils/money";
 import { formatDate, formatTime } from "@/utils/date";
+import { invoiceQrPayload } from "@/lib/invoiceQr";
 
 export interface PrinterAdapter {
   name: string;
@@ -55,16 +56,31 @@ export function studentReceiptHtml(
   const lines = order.lines
     .map(
       (line) =>
-        `<tr><td>${line.name} x${line.quantity}</td><td class="right">${formatSar(line.total_halalas)}</td></tr>`,
+        `<tr><td>${line.name} x${line.quantity}</td><td class="right">${formatSar(line.unit_price_halalas)}</td><td class="right">${formatSar(line.total_halalas)}</td></tr>`,
     )
     .join("");
+  const vat = order.vat_amount_halalas ?? 0;
+  const ex = order.subtotal_ex_vat_halalas ?? order.subtotal_halalas;
+  const total = order.total_inc_vat_halalas ?? order.total_halalas;
+  const sellerEn = settings.seller_legal_name_en || settings.restaurant_name;
+  const sellerAr = settings.seller_legal_name_ar || settings.restaurant_name;
+  const vatNo = settings.vat_registration_number || "";
+  const issued = new Date(order.created_at).toISOString();
+  const qr = invoiceQrPayload({
+    sellerName: sellerEn,
+    vatNumber: vatNo,
+    timestampIso: issued,
+    totalIncVat: (total / 100).toFixed(2),
+    vatAmount: (vat / 100).toFixed(2),
+  });
   return `<!doctype html>
 <html>
 <head>
   <title>${order.order_number}</title>
+  <meta charset="utf-8" />
   <style>
     @page { size: 80mm auto; margin: 4mm; }
-    body { font-family: ui-monospace, Consolas, monospace; width: 72mm; color: #111; }
+    body { font-family: "Segoe UI", Tahoma, ui-monospace, Consolas, monospace; width: 72mm; color: #111; }
     h1, h2, p { margin: 0; text-align: center; }
     h1 { font-size: 16px; letter-spacing: 1px; }
     h2 { font-size: 12px; margin-bottom: 8px; }
@@ -72,27 +88,38 @@ export function studentReceiptHtml(
     td.right { text-align: right; }
     .line { border-top: 1px dashed #333; margin: 8px 0; }
     .total { font-size: 14px; font-weight: bold; }
+    .small { font-size: 11px; }
   </style>
 </head>
 <body>
-  <h1>${settings.restaurant_name.toUpperCase()}</h1>
-  <h2>Malaysian Food</h2>
-  <p>Order: ${order.order_number}</p>
-  <div class="line"></div>
-  <table>${lines}</table>
+  <h1>${sellerAr}</h1>
+  <h1>${sellerEn.toUpperCase()}</h1>
+  <h2>فاتورة ضريبية مبسطة</h2>
+  <h2>SIMPLIFIED TAX INVOICE</h2>
+  <p>Invoice ${order.order_number}</p>
+  <p class="small">${settings.address_ar || ""}</p>
+  <p class="small">${settings.address_en || ""}</p>
+  ${vatNo ? `<p>VAT / الرقم الضريبي: ${vatNo}</p>` : `<p class="small">VAT number not set in Settings</p>`}
   <div class="line"></div>
   <table>
-    <tr><td>Subtotal</td><td class="right">${formatSar(order.subtotal_halalas)}</td></tr>
-    <tr><td>Discount</td><td class="right">${formatSar(order.discount_halalas)}</td></tr>
-    <tr class="total"><td>TOTAL</td><td class="right">${formatSar(order.total_halalas)}</td></tr>
+    <tr><td>Item</td><td class="right">Price</td><td class="right">Total</td></tr>
+    ${lines}
+  </table>
+  <div class="line"></div>
+  <table>
+    <tr><td>Subtotal before VAT</td><td class="right" colspan="2">${formatSar(ex)}</td></tr>
+    <tr><td>Discount</td><td class="right" colspan="2">${formatSar(order.discount_halalas)}</td></tr>
+    <tr><td>VAT</td><td class="right" colspan="2">${formatSar(vat)}</td></tr>
+    <tr class="total"><td>TOTAL including VAT</td><td class="right" colspan="2">${formatSar(total)}</td></tr>
   </table>
   <div class="line"></div>
   <p>Payment: ${order.payment_method}</p>
   <p>Cashier: ${order.cashier_name}</p>
-  <p>Date: ${formatDate(order.created_at)}</p>
-  <p>Time: ${formatTime(order.created_at)}</p>
+  <p>Date: ${formatDate(order.created_at)} ${formatTime(order.created_at)}</p>
+  ${qr ? `<p class="small">Tax QR payload (not Fatoora-certified yet)</p><p class="small">${qr.replace(/</g, "")}</p>` : ""}
   <div class="line"></div>
-  <p>${settings.receipt_footer}</p>
+  <p>شكراً لكم</p>
+  <p>${settings.receipt_footer || "Thank You"}</p>
 </body>
 </html>`;
 }

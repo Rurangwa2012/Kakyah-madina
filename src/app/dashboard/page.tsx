@@ -50,6 +50,10 @@ function Dashboard() {
       acc.cash_sales_halalas += row.cash_sales_halalas;
       acc.card_sales_halalas += row.card_sales_halalas;
       acc.mobile_sales_halalas += row.mobile_sales_halalas;
+      acc.mada_sales_halalas += row.mada_sales_halalas ?? 0;
+      acc.apple_pay_sales_halalas += row.apple_pay_sales_halalas ?? 0;
+      acc.refunds_halalas += row.refunds_halalas ?? 0;
+      acc.discounts_halalas += row.discounts_halalas ?? 0;
       acc.order_count += row.order_count;
       acc.student_order_count += row.student_order_count;
       acc.group_order_count += row.group_order_count;
@@ -97,7 +101,10 @@ function Dashboard() {
         <Stat label={t("dashboard.studentOrders")} value={String(totals.student_order_count)} />
         <Stat label={t("dashboard.groupOrders")} value={String(totals.group_order_count)} />
         <Stat label={t("dashboard.cashSales")} value={formatSar(totals.cash_sales_halalas)} />
-        <Stat label={t("dashboard.cardSales")} value={formatSar(totals.card_sales_halalas)} />
+        <Stat label={t("mada")} value={formatSar(totals.mada_sales_halalas)} />
+        <Stat label={t("card")} value={formatSar(totals.card_sales_halalas)} />
+        <Stat label={t("apple_pay")} value={formatSar(totals.apple_pay_sales_halalas)} />
+        <Stat label={t("refund")} value={formatSar(totals.refunds_halalas)} />
         <Stat label={t("dashboard.expenses")} value={formatSar(totals.expenses_halalas)} />
         <Stat label={t("dashboard.profit")} value={formatSar(profit)} />
       </div>

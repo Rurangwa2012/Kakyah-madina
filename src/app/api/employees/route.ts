@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { normalizeRole } from "@/lib/userProfile";
+import { rateLimit } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
   const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
   if (!token) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+  if (!rateLimit(`employees:${token.slice(0, 24)}`, 8, 60_000)) {
+    return NextResponse.json({ error: "Too many requests. Wait a moment." }, { status: 429 });
   }
 
   let admin;

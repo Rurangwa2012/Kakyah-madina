@@ -2,17 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useI18n } from "@/i18n/I18nProvider";
 import { cn } from "@/utils/format";
+import { SessionLock } from "@/components/SessionLock";
+import { getSettings } from "@/services/catalog";
 
 const ownerNav = [
   { href: "/dashboard", key: "nav.dashboard" },
   { href: "/pos", key: "nav.pos" },
   { href: "/group-orders", key: "nav.groupOrders" },
   { href: "/orders", key: "nav.orders" },
+  { href: "/shifts", key: "nav.shifts" },
   { href: "/menu", key: "nav.menu" },
   { href: "/inventory", key: "nav.inventory" },
+  { href: "/purchases", key: "nav.purchases" },
   { href: "/buffet", key: "nav.buffet" },
   { href: "/expenses", key: "nav.expenses" },
   { href: "/reports", key: "nav.reports" },
@@ -25,6 +30,7 @@ const cashierNav = [
   { href: "/pos", key: "nav.pos" },
   { href: "/group-orders", key: "nav.groupOrders" },
   { href: "/orders", key: "nav.todayOrders" },
+  { href: "/shifts", key: "nav.shifts" },
   { href: "/inventory", key: "nav.inventory" },
 ];
 
@@ -32,10 +38,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { profile, logout, online } = useAuth();
   const { t } = useI18n();
   const pathname = usePathname();
+  const [lockMinutes, setLockMinutes] = useState(10);
   const nav =
     profile?.role === "owner"
       ? ownerNav
       : cashierNav.filter((item) => item.href !== "/inventory" || profile?.inventory_access);
+
+  useEffect(() => {
+    void getSettings().then((settings) => setLockMinutes(settings.lock_minutes || 10));
+  }, []);
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[240px_1fr]">
@@ -70,12 +81,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             {online ? t("online") : t("offline")}
           </span>
+          <button type="button" onClick={() => window.dispatchEvent(new Event("kak-yah-lock"))} className="text-[var(--muted)]">
+            {t("lock.lock")}
+          </button>
           <button type="button" onClick={() => void logout()} className="text-[var(--muted)]">
             {t("logout")}
           </button>
         </div>
       </aside>
-      <main className="min-h-screen p-4 md:p-6">{children}</main>
+      <main className="min-h-screen p-4 md:p-6">
+        <SessionLock minutes={lockMinutes}>{children}</SessionLock>
+      </main>
     </div>
   );
 }

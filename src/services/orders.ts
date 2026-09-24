@@ -1,9 +1,8 @@
-import { GROUP_COUNTER_ID, STUDENT_COUNTER_ID } from "@/lib/collections";
-import { bumpDailySummary, nextOrderNumber, paymentIncrement, writeAuditLog } from "@/lib/firestore";
+import { GROUP_COUNTER_ID } from "@/lib/collections";
+import { bumpDailySummary, nextOrderNumber, writeAuditLog } from "@/lib/firestore";
 import { listenQuery, type Unsubscribe } from "@/lib/listen";
 import { getSupabase, throwIfError } from "@/lib/supabase";
 import { toDateKey } from "@/utils/date";
-import { applyDiscount, orderSubtotal, payableTotal } from "@/utils/money";
 import type {
   AppUser,
   GroupOrder,
@@ -30,6 +29,14 @@ function mapOrder(row: Record<string, unknown>): StudentOrder {
     created_at: Number(row.created_at ?? 0),
     updated_at: Number(row.updated_at ?? 0),
     date_key: String(row.date_key ?? ""),
+    vat_amount_halalas: Number(row.vat_amount_halalas ?? 0),
+    vat_rate_basis_points: Number(row.vat_rate_basis_points ?? 0),
+    subtotal_ex_vat_halalas: Number(row.subtotal_ex_vat_halalas ?? 0),
+    total_inc_vat_halalas: Number(row.total_inc_vat_halalas ?? row.total_halalas ?? 0),
+    terminal_id: String(row.terminal_id ?? "POS-01"),
+    shift_id: row.shift_id ? String(row.shift_id) : "",
+    invoice_uuid: row.invoice_uuid ? String(row.invoice_uuid) : "",
+    zatca_status: String(row.zatca_status ?? "not_required"),
   };
 }
 
@@ -91,50 +98,52 @@ export function listenRecentOrders(cb: (orders: StudentOrder[]) => void): Unsubs
 }
 
 export async function createStudentOrder(input: {
-  lines: OrderLine[];
+  items: Array<{ menu_id: string; quantity: number }>;
   discount_halalas: number;
-  payment_method: PaymentMethod;
+  payments: Array<{ method: PaymentMethod; amount_halalas: number; provider?: string; transaction_reference?: string }>;
   actor: AppUser;
-  studentPrefix?: string;
+  idempotency_key: string;
+  terminal_id?: string;
+  discount_reason?: string;
 }): Promise<StudentOrder> {
-  const subtotal = orderSubtotal(input.lines);
-  const total = payableTotal(applyDiscount(subtotal, input.discount_halalas), input.payment_method);
-  const order_number = await nextOrderNumber(STUDENT_COUNTER_ID, input.studentPrefix ?? "S");
-  const now = Date.now();
-  const payload = {
-    order_number,
-    type: "student" as const,
-    lines: input.lines,
-    subtotal_halalas: subtotal,
-    discount_halalas: Math.round(input.discount_halalas),
-    total_halalas: total,
-    payment_method: input.payment_method,
-    status: "completed" as const,
-    cashier_id: input.actor.id,
-    cashier_name: input.actor.name,
-    created_at: now,
-    updated_at: now,
-    date_key: toDateKey(),
-  };
-  const { data, error } = await getSupabase().from("orders").insert(payload).select("id").single();
+  const { data, error } = await getSupabase().rpc("finalize_sale", {
+    p_items: input.items,
+    p_payments: input.payments.map((pay) => ({
+      method: pay.method,
+      amount_halalas: Math.round(pay.amount_halalas),
+      provider: pay.provider ?? "",
+      transaction_reference: pay.transaction_reference ?? "",
+    })),
+    p_discount_halalas: Math.round(input.discount_halalas),
+    p_idempotency_key: input.idempotency_key,
+    p_terminal_id: input.terminal_id ?? "POS-01",
+    p_discount_reason: input.discount_reason ?? "",
+  });
   throwIfError(error);
   if (!data) throw new Error("Could not save order");
-  await bumpDailySummary({
-    totalSales: total,
-    studentSales: total,
-    orderCount: 1,
-    studentOrderCount: 1,
-    ...paymentIncrement(input.payment_method, total),
+  return mapOrder(data as Record<string, unknown>);
+}
+
+export async function requestRefund(
+  order: StudentOrder,
+  amountHalalas: number,
+  reasonCode: string,
+  reasonNote: string,
+  paymentMethod: PaymentMethod,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("create_refund", {
+    p_order_id: order.id,
+    p_amount_halalas: Math.round(amountHalalas),
+    p_reason_code: reasonCode,
+    p_reason_note: reasonNote,
+    p_payment_method: paymentMethod,
   });
-  await writeAuditLog({
-    action: "ORDER_CREATED",
-    message: `${input.actor.name} created ${order_number}`,
-    actor_id: input.actor.id,
-    actor_name: input.actor.name,
-    actor_role: input.actor.role,
-    meta: { order_number, total },
-  });
-  return { id: String(data.id), ...payload };
+  throwIfError(error);
+}
+
+export async function approveRefund(refundId: string): Promise<void> {
+  const { error } = await getSupabase().rpc("approve_refund", { p_refund_id: refundId });
+  throwIfError(error);
 }
 
 export async function cancelStudentOrder(
@@ -142,32 +151,14 @@ export async function cancelStudentOrder(
   actor: AppUser,
   refund = false,
 ): Promise<void> {
-  const { data, error } = await getSupabase().from("orders").select("*").eq("id", order.id).single();
-  throwIfError(error);
-  const current = mapOrder(data as Record<string, unknown>);
-  if (current.status !== "completed") throw new Error("Order already closed");
-  const { error: upd } = await getSupabase()
-    .from("orders")
-    .update({ status: refund ? "refunded" : "cancelled", updated_at: Date.now() })
-    .eq("id", order.id)
-    .eq("status", "completed");
-  throwIfError(upd);
-  const reverse = -current.total_halalas;
-  await bumpDailySummary({
-    dateKey: current.date_key,
-    totalSales: reverse,
-    studentSales: reverse,
-    orderCount: -1,
-    studentOrderCount: -1,
-    ...paymentIncrement(current.payment_method, reverse),
-  });
-  await writeAuditLog({
-    action: refund ? "ORDER_REFUNDED" : "ORDER_CANCELLED",
-    message: `${actor.name} ${refund ? "refunded" : "cancelled"} ${order.order_number}`,
-    actor_id: actor.id,
-    actor_name: actor.name,
-    actor_role: actor.role,
-  });
+  if (refund) {
+    await requestRefund(order, order.total_halalas, "other", "Owner refund", order.payment_method);
+    return;
+  }
+  if (order.status === "completed" || order.status === "paid") {
+    throw new Error("Paid orders must be refunded. They cannot be deleted.");
+  }
+  void actor;
 }
 
 export function listenGroupOrders(cb: (orders: GroupOrder[]) => void): Unsubscribe {

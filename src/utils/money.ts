@@ -1,5 +1,3 @@
-import type { PaymentMethod } from "@/types";
-
 /** All money is stored as integer halalas. SAR 1.00 = 100. */
 
 export function sarToHalalas(amount: number): number {
@@ -27,13 +25,6 @@ export function applyDiscount(subtotalHalalas: number, discountHalalas: number):
   const subtotal = Math.round(subtotalHalalas);
   const discount = Math.max(0, Math.round(discountHalalas));
   return Math.max(0, subtotal - discount);
-}
-
-/** Card payments: do not add 15%. Charge 15% less than the food total. */
-export function payableTotal(baseHalalas: number, method: PaymentMethod): number {
-  const base = Math.max(0, Math.round(baseHalalas));
-  if (method === "card") return Math.round((base * 85) / 100);
-  return base;
 }
 
 export function lineTotal(unitHalalas: number, quantity: number): number {
